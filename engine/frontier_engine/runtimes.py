@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -46,3 +47,29 @@ def probe_ollama() -> dict[str, Any]:
         return {"runtime": "ollama", "available": False, "reason": "FR-RUNTIME-OLLAMA-UNHEALTHY", "detail": str(error), "models": []}
     models = [line.split()[0] for line in listing[1:] if line.split()]
     return {"runtime": "ollama", "available": bool(models), "reason": None if models else "FR-RUNTIME-OLLAMA-NO-MODEL", "version": version, "models": models}
+
+
+class LocalRuntimeUnavailable(RuntimeError):
+    pass
+
+
+def stream_ollama(model: str, prompt: str) -> Iterator[str]:
+    """Yield output from the local process only after its runtime probe succeeds."""
+    probe = probe_ollama()
+    if not probe["available"]:
+        raise LocalRuntimeUnavailable(str(probe["reason"]))
+    if model not in probe["models"]:
+        raise LocalRuntimeUnavailable("FR-RUNTIME-OLLAMA-MODEL-NOT-INSTALLED")
+    executable = shutil.which("ollama")
+    if executable is None:
+        raise LocalRuntimeUnavailable("FR-RUNTIME-OLLAMA-NOT-FOUND")
+    process = subprocess.Popen([executable, "run", model, prompt], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        if process.stdout is None:
+            raise RuntimeError("FR-RUNTIME-OLLAMA-STREAM-MISSING")
+        yield from process.stdout
+        if process.wait() != 0:
+            raise RuntimeError("FR-RUNTIME-OLLAMA-GENERATION-FAILED")
+    finally:
+        if process.poll() is None:
+            process.terminate()
