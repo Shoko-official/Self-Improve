@@ -6,7 +6,12 @@ import argparse
 import hashlib
 import json
 import os
+import signal
+import subprocess
+import sys
 import threading
+import time
+import socket
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -18,9 +23,102 @@ from frontier_engine.environments import list_manifests, probe_environment
 from frontier_engine.store import FrontierStore
 
 
+_BACKGROUND_PROCESSES: dict[int, subprocess.Popen[bytes]] = {}
+
+
 def data_root() -> Path:
     configured = os.environ.get("FRONTIER_DATA_DIR")
     return Path(configured) if configured else Path.home() / ".frontier-data"
+
+
+def _control_state_path(root: Path) -> Path: return root / "control-plane-service.json"
+
+
+def _control_log_path(root: Path) -> Path: return root / "control-plane-service.log"
+
+
+def _service_alive(pid: int) -> bool:
+    if os.name == "nt":
+        import ctypes
+        handle = ctypes.windll.kernel32.OpenProcess(0x00100000, False, pid)
+        if not handle: return False
+        try: return ctypes.windll.kernel32.WaitForSingleObject(handle, 0) == 0x00000102
+        finally: ctypes.windll.kernel32.CloseHandle(handle)
+    try: os.kill(pid, 0)
+    except ProcessLookupError: return False
+    except PermissionError: return True
+    return True
+
+
+def _read_control_state(root: Path) -> dict[str, object] | None:
+    path = _control_state_path(root)
+    if not path.is_file(): return None
+    try: state = json.loads(path.read_text())
+    except json.JSONDecodeError: path.unlink(missing_ok=True); return None
+    if not isinstance(state, dict) or not isinstance(state.get("pid"), int) or not isinstance(state.get("url"), str):
+        path.unlink(missing_ok=True); return None
+    if not _service_alive(state["pid"]): path.unlink(missing_ok=True); return None
+    return state
+
+
+def _write_control_state(root: Path, state: dict[str, object]) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    path = _control_state_path(root)
+    temporary = path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, sort_keys=True))
+    temporary.replace(path)
+
+
+def _service_status(root: Path) -> dict[str, object]:
+    state = _read_control_state(root)
+    return {"running": state is not None, "url": state["url"] if state else None, "pid": state["pid"] if state else None}
+
+
+def start_background_service(root: Path) -> dict[str, object]:
+    if _read_control_state(root) is not None: raise RuntimeError("A Frontier control-plane service is already running.")
+    root.mkdir(parents=True, exist_ok=True)
+    log_path = _control_log_path(root)
+    with socket.socket() as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+    command = [sys.executable, "-m", "frontier_engine.cli", "serve", "--background-child", "--data-dir", str(root), "--loopback-port", str(port)]
+    environment = {**os.environ, "FRONTIER_DATA_DIR": str(root)}
+    options: dict[str, object] = {"cwd": str(Path.cwd()), "env": environment, "stdout": None, "stderr": None, "close_fds": True}
+    if os.name == "nt": options["creationflags"] = subprocess.CREATE_NO_WINDOW
+    else: options["start_new_session"] = True
+    with log_path.open("ab") as log:
+        options["stdout"] = log; options["stderr"] = log
+        process = subprocess.Popen(command, **options)
+    _BACKGROUND_PROCESSES[process.pid] = process
+    time.sleep(.05)
+    if process.poll() is None:
+        _write_control_state(root, {"pid": process.pid, "url": f"http://127.0.0.1:{port}", "started_at": time.time()})
+        return _service_status(root)
+    detail = log_path.read_text(errors="replace").strip()
+    raise RuntimeError(f"The Frontier control-plane service did not start. {detail or 'See frontierctl logs.'}")
+
+
+def stop_background_service(root: Path) -> dict[str, object]:
+    state = _read_control_state(root)
+    if state is None: return _service_status(root)
+    os.kill(state["pid"], signal.SIGTERM)
+    process = _BACKGROUND_PROCESSES.pop(state["pid"], None)
+    if process is not None:
+        try: process.wait(timeout=5)
+        except subprocess.TimeoutExpired: pass
+    else:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and _service_alive(state["pid"]): time.sleep(.05)
+    if _service_alive(state["pid"]): raise RuntimeError("The Frontier control-plane service did not stop within five seconds.")
+    _control_state_path(root).unlink(missing_ok=True)
+    return _service_status(root)
+
+
+def service_logs(root: Path, tail: int) -> dict[str, object]:
+    if tail < 0: raise ValueError("Log tail must be non-negative.")
+    path = _control_log_path(root)
+    lines = path.read_text(errors="replace").splitlines()[-tail:] if path.is_file() else []
+    return {"path": str(path), "lines": lines}
 
 
 def status(root: Path) -> dict[str, object]:
@@ -29,7 +127,7 @@ def status(root: Path) -> dict[str, object]:
         counts = {table: store.connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] for table in ("projects", "sessions", "artifacts", "artifact_versions", "jobs")}
     finally:
         store.close()
-    return {"data_root": str(root), "counts": counts}
+    return {"data_root": str(root), "counts": counts, "control_service": _service_status(root)}
 
 
 def projects(root: Path) -> dict[str, object]:
@@ -253,7 +351,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "environments", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -280,8 +378,13 @@ def main() -> None:
     parser.add_argument("--evidence", action="append", nargs=2, metavar=("URI", "SELECTOR"))
     parser.add_argument("--language", choices=("python", "r"))
     parser.add_argument("--duration-seconds", type=float)
+    parser.add_argument("--background", action="store_true")
+    parser.add_argument("--background-child", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--tail", type=int, default=100)
+    parser.add_argument("--data-dir", type=Path)
+    parser.add_argument("--loopback-port", type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args()
-    root = data_root()
+    root = args.data_dir if args.data_dir is not None else data_root()
     if args.command == "doctor":
         result = doctor()
     elif args.command == "status":
@@ -291,17 +394,36 @@ def main() -> None:
     elif args.command == "serve":
         if args.duration_seconds is not None and args.duration_seconds < 0:
             parser.error("serve --duration-seconds must be non-negative")
-        service = LoopbackService()
+        if args.background and args.background_child:
+            parser.error("serve accepts only one background mode")
+        if args.background:
+            result = start_background_service(root)
+            print(json.dumps(result, sort_keys=True) if args.json else json.dumps(result, indent=2, sort_keys=True))
+            return
+        service = LoopbackService(args.loopback_port)
         service.start()
-        result = {"url": service.url, "status_path": "/status", "authorization": "Bearer", "token": service.token}
-        print(json.dumps(result, sort_keys=True) if args.json else json.dumps(result, indent=2, sort_keys=True))
+        public_result = {"url": service.url, "status_path": "/status", "authorization": "Bearer"}
+        if not args.background_child:
+            print(json.dumps({**public_result, "token": service.token}, sort_keys=True) if args.json else json.dumps({**public_result, "token": service.token}, indent=2, sort_keys=True))
+        stop_event = threading.Event()
+        previous_handler = signal.signal(signal.SIGTERM, lambda *_: stop_event.set())
         try:
-            threading.Event().wait(args.duration_seconds)
+            stop_event.wait(args.duration_seconds)
         except KeyboardInterrupt:
             pass
         finally:
+            signal.signal(signal.SIGTERM, previous_handler)
             service.close()
         return
+    elif args.command == "url":
+        result = _service_status(root)
+        if not result["running"]: parser.error("No Frontier control-plane service is running")
+    elif args.command == "service-status":
+        result = _service_status(root)
+    elif args.command == "logs":
+        result = service_logs(root, args.tail)
+    elif args.command == "stop":
+        result = stop_background_service(root)
     elif args.command == "environments":
         result = {"manifests": list_manifests(root), "probe": probe_environment(args.language or "python")}
     elif args.command == "projects":

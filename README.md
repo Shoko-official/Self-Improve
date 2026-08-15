@@ -16,6 +16,9 @@ $env:PYTHONPATH = 'engine'
 python -m frontier_engine doctor
 python -m frontier_engine.cli status --json
 python -m frontier_engine.cli serve --json
+python -m frontier_engine.cli serve --background --json
+python -m frontier_engine.cli url --json
+python -m frontier_engine.cli stop --json
 python -m frontier_engine.cli projects --json
 ```
 
