@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, grant_project_folder, import_data, jobs, project_folders, projects, revoke_project_folder, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, grant_project_folder, import_data, jobs, project_folders, projects, revoke_project_folder, search_artifacts, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -110,6 +110,12 @@ class CliTests(unittest.TestCase):
             artifact = create_artifact(root, project_id, "result.md", "text/markdown", "# Result")
             self.assertEqual(artifacts(root, project_id)["artifacts"][0]["name"], "result.md")
             self.assertEqual(artifact_versions(root, artifact["id"])["versions"][0]["execution_log"]["state"], "not_executed")
+
+    def test_artifacts_are_searchable_by_literal_name_and_media_type(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir); project_id = create_project(root, "Artifacts")["id"]
+            create_artifact(root, project_id, "qc-report.md", "text/markdown", "# QC")
+            self.assertEqual(search_artifacts(root, "QC", project_id, "text/markdown")["artifacts"][0]["name"], "qc-report.md")
 
     def test_claims_keep_evidence_and_support_status(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

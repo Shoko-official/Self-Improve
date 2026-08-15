@@ -71,6 +71,16 @@ class FrontierStoreTests(unittest.TestCase):
         self.store.revoke_project_folder_grant(grant_id)
         self.assertFalse(self.store.authorize_project_path(project_id, granted / "input.csv", "read"))
 
+    def test_artifact_search_returns_latest_durable_version_metadata(self) -> None:
+        project_id = self.store.create_project("Artifacts")
+        artifact_id = self.store.create_artifact(project_id, "qc-report", "text/markdown")
+        self.store.add_artifact_version(artifact_id, b"first")
+        self.store.add_artifact_version(artifact_id, b"second")
+        self.store.create_artifact(project_id, "qc-plot", "image/svg+xml")
+        records = self.store.search_artifacts("QC", project_id, "text/markdown")
+        self.assertEqual(records[0]["latest_version"], 2)
+        self.assertEqual(records[0]["name"], "qc-report")
+
     def test_jobs_are_durable_and_cancellation_is_explicit(self) -> None:
         project_id = self.store.create_project("Jobs")
         job_id = self.store.create_job(project_id, "rag.ingest", {"source": "paper.pdf"})
