@@ -1,6 +1,6 @@
 # Deployment and CLI
 
-During development, run `python -m frontier_engine.cli doctor --json` for the host report and `python -m frontier_engine.cli status --json` for durable-store counts. `python -m frontier_engine.cli serve --json` starts an authenticated status endpoint on a random `127.0.0.1` port and prints its ephemeral bearer token. `FRONTIER_DATA_DIR` selects an explicit local data root.
+During development, run `python -m frontier_engine.cli doctor --json` for the host report and `python -m frontier_engine.cli status --json` for durable-store counts. `python -m frontier_engine.cli serve --json` starts an authenticated status endpoint on a random `127.0.0.1` port and prints its ephemeral bearer token. `frontierctl serve --background`, `url`, `service-status`, `logs`, and `stop` manage a local child service without writing its bearer token to the state file or log. `FRONTIER_DATA_DIR` selects an explicit local data root.
 
 `python -m frontier_engine.cli projects --json` lists local projects. Add `--name "Research workspace"` to create one durable project record.
 

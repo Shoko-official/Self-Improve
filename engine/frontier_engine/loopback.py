@@ -9,9 +9,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class LoopbackService:
-    def __init__(self) -> None:
+    def __init__(self, port: int = 0) -> None:
         self.token = secrets.token_urlsafe(32)
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
+        self._server = ThreadingHTTPServer(("127.0.0.1", port), self._handler())
         self._thread: threading.Thread | None = None
 
     @property

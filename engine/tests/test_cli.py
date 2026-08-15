@@ -110,3 +110,23 @@ class CliTests(unittest.TestCase):
             self.assertTrue(descriptor["url"].startswith("http://127.0.0.1:"))
             self.assertEqual(descriptor["status_path"], "/status")
             self.assertTrue(descriptor["token"])
+
+    def test_background_control_plane_has_no_persisted_bearer_token(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            environment = {**os.environ, "FRONTIER_DATA_DIR": str(root)}
+            def control(*arguments: str) -> dict[str, object]:
+                result = subprocess.run([sys.executable, "-m", "frontier_engine.cli", *arguments, "--json"], capture_output=True, check=True, env=environment, text=True)
+                return json.loads(result.stdout)
+            subprocess.run([sys.executable, "-m", "frontier_engine.cli", "serve", "--background", "--json"], check=True, env=environment, stdout=subprocess.DEVNULL)
+            service = control("service-status")
+            try:
+                self.assertTrue(service["running"])
+                self.assertTrue(str(service["url"]).startswith("http://127.0.0.1:"))
+                state = (root / "control-plane-service.json").read_text()
+                self.assertNotIn("token", state)
+                self.assertEqual(control("url")["url"], service["url"])
+                self.assertTrue(control("service-status")["running"])
+                self.assertNotIn("token", "\n".join(control("logs", "--tail", "10")["lines"]))
+            finally:
+                self.assertFalse(control("stop")["running"])
