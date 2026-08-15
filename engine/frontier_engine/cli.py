@@ -48,6 +48,45 @@ def create_project(root: Path, name: str) -> dict[str, object]:
     return {"id": project_id, "name": name}
 
 
+def sessions(root: Path, project_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        records = [dict(row) for row in store.connection.execute("SELECT id, project_id, title, parent_session_id, reasoning_effort, starred, created_at FROM sessions WHERE project_id = ? ORDER BY created_at, id", (project_id,))]
+    finally:
+        store.close()
+    return {"project_id": project_id, "sessions": records}
+
+
+def create_session(root: Path, project_id: str, title: str, parent_session_id: str | None = None) -> dict[str, object]:
+    title = title.strip()
+    if not title:
+        raise ValueError("Session title is required.")
+    store = FrontierStore(root)
+    try:
+        session_id = store.create_session(project_id, title, parent_session_id=parent_session_id)
+    finally:
+        store.close()
+    return {"id": session_id, "project_id": project_id, "title": title, "parent_session_id": parent_session_id}
+
+
+def set_session_starred(root: Path, session_id: str, starred: bool) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        store.set_session_starred(session_id, starred)
+    finally:
+        store.close()
+    return {"id": session_id, "starred": starred}
+
+
+def archive_project(root: Path, project_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        store.archive_project(project_id)
+    finally:
+        store.close()
+    return {"id": project_id, "archived": True}
+
+
 def export_data(root: Path, output: Path) -> dict[str, object]:
     root = root.resolve()
     output = output.resolve()
@@ -118,12 +157,17 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "sessions", "star-session", "archive-project", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--name")
+    parser.add_argument("--project-id")
+    parser.add_argument("--session-id")
+    parser.add_argument("--title")
+    parser.add_argument("--parent-session-id")
+    parser.add_argument("--starred", choices=("true", "false"))
     args = parser.parse_args()
     root = data_root()
     if args.command == "doctor":
@@ -134,6 +178,18 @@ def main() -> None:
         result = {"data_root": str(root), "environment_variable": "FRONTIER_DATA_DIR"}
     elif args.command == "projects":
         result = create_project(root, args.name) if args.name is not None else projects(root)
+    elif args.command == "sessions":
+        if args.project_id is None:
+            parser.error("sessions requires --project-id")
+        result = create_session(root, args.project_id, args.title, args.parent_session_id) if args.title is not None else sessions(root, args.project_id)
+    elif args.command == "star-session":
+        if args.session_id is None or args.starred is None:
+            parser.error("star-session requires --session-id and --starred true|false")
+        result = set_session_starred(root, args.session_id, args.starred == "true")
+    elif args.command == "archive-project":
+        if args.project_id is None:
+            parser.error("archive-project requires --project-id")
+        result = archive_project(root, args.project_id)
     elif args.command == "export":
         if args.output is None:
             parser.error("export requires --output PATH")

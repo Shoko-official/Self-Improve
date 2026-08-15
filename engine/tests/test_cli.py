@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import create_project, data_root, export_data, import_data, projects, status
+from frontier_engine.cli import archive_project, create_project, create_session, data_root, export_data, import_data, projects, sessions, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -59,3 +59,17 @@ class CliTests(unittest.TestCase):
             self.assertEqual([record["name"] for record in projects(root)["projects"]], ["Local research"])
             with self.assertRaisesRegex(ValueError, "required"):
                 create_project(root, "   ")
+
+    def test_sessions_can_be_created_forked_starred_and_archived(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_id = create_project(root, "Sessions")["id"]
+            first = create_session(root, project_id, "Initial analysis")
+            fork = create_session(root, project_id, "Alternative", first["id"])
+            set_session_starred(root, fork["id"], True)
+            records = sessions(root, project_id)["sessions"]
+            self.assertEqual([record["parent_session_id"] for record in records], [None, first["id"]])
+            self.assertEqual(records[1]["starred"], 1)
+            archive_project(root, project_id)
+            with self.assertRaisesRegex(Exception, "archived"):
+                create_session(root, project_id, "Blocked")

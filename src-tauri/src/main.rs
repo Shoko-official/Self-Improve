@@ -37,6 +37,30 @@ fn create_workspace_project_development(name: String) -> Result<serde_json::Valu
     run_development_engine(&["projects".to_owned(), "--name".to_owned(), name])
 }
 
+#[tauri::command]
+fn workspace_sessions_development(project_id: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["sessions".to_owned(), "--project-id".to_owned(), project_id])
+}
+
+#[tauri::command]
+fn create_workspace_session_development(project_id: String, title: String, parent_session_id: Option<String>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["sessions".to_owned(), "--project-id".to_owned(), project_id, "--title".to_owned(), title];
+    if let Some(parent_session_id) = parent_session_id {
+        arguments.extend(["--parent-session-id".to_owned(), parent_session_id]);
+    }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn set_workspace_session_starred_development(session_id: String, starred: bool) -> Result<serde_json::Value, String> {
+    run_development_engine(&["star-session".to_owned(), "--session-id".to_owned(), session_id, "--starred".to_owned(), starred.to_string()])
+}
+
+#[tauri::command]
+fn archive_workspace_project_development(project_id: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["archive-project".to_owned(), "--project-id".to_owned(), project_id])
+}
+
 fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, String> {
     if !cfg!(debug_assertions) {
         return Err(
@@ -77,7 +101,7 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development])
+        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_session_starred_development, archive_workspace_project_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
 }
