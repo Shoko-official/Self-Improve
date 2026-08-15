@@ -350,6 +350,21 @@ def run_agent(root: Path, project_id: str, model: str, prompt: str) -> dict[str,
     finally: state.close()
 
 
+def serve_kernel_stdio(root: Path) -> None:
+    service = LoopbackService(data_root=root)
+    try:
+        for line in sys.stdin:
+            if not line.strip():
+                continue
+            try:
+                response = service._rpc(json.loads(line))
+            except (TypeError, ValueError, json.JSONDecodeError) as error:
+                response = {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": str(error)}}
+            print(json.dumps(response, sort_keys=True), flush=True)
+    finally:
+        service.close()
+
+
 def agent_activity(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
     try: store.require_active_project(project_id)
@@ -517,7 +532,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "create-environment", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -601,6 +616,9 @@ def main() -> None:
         finally:
             signal.signal(signal.SIGTERM, previous_handler)
             service.close()
+        return
+    elif args.command == "kernel-stdio":
+        serve_kernel_stdio(root)
         return
     elif args.command == "url":
         result = _service_status(root)
