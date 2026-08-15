@@ -20,6 +20,7 @@
 | Local data transfer | partially_verified | `frontierctl` ZIP export/import writes a SHA-256 manifest, requires an explicit empty import target, and rejects traversal paths in `engine/tests/test_cli.py` |
 | MCP | partially_verified | Stdio JSON-RPC initialize, typed tool discovery, structured read-only result, and unknown-tool rejection are covered by `engine/tests/test_mcp_server.py` |
 | Agent | partially_verified | Project-scoped plans, todo transitions, memory search, and deletion are covered by `engine/tests/test_agent_state.py` |
+| Agent workspace tools | partially_verified | Typed list/read/write tools reject traversal, require exact project folder grants, respect archived projects, and record call outcomes in `engine/tests/test_workspace_tools.py` |
 | Diagnostics | partially_verified | Stable codes, evidence/fact separation, confidence-bounded inferences, and redaction are covered by `engine/tests/test_diagnostics.py` |
 | Benchmark | partially_verified | Raw samples, required environment fingerprints, summary metrics, and comparison deltas are covered by `engine/tests/test_benchmarks.py` |
 | Automation | partially_verified | Durable definitions, dry-run history, and external-effect approval gates are covered by `engine/tests/test_automations.py` |
