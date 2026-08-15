@@ -93,6 +93,7 @@ class FrontierStore:
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL REFERENCES projects(id),
                 session_id TEXT REFERENCES sessions(id),
+                parent_job_id TEXT REFERENCES jobs(id),
                 operation TEXT NOT NULL,
                 state TEXT NOT NULL CHECK(state IN ('queued', 'running', 'cancel_requested', 'cancelled', 'succeeded', 'failed')),
                 request_json TEXT NOT NULL,
@@ -129,6 +130,9 @@ class FrontierStore:
             );
             """
         )
+        columns = {row["name"] for row in self.connection.execute("PRAGMA table_info(jobs)")}
+        if "parent_job_id" not in columns:
+            self.connection.execute("ALTER TABLE jobs ADD COLUMN parent_job_id TEXT REFERENCES jobs(id)")
         self.connection.commit()
 
     def create_project(self, name: str, instructions: str = "") -> str:
@@ -377,6 +381,7 @@ class FrontierStore:
         operation: str,
         request: Mapping[str, object],
         session_id: str | None = None,
+        parent_job_id: str | None = None,
     ) -> str:
         self._require_active_project(project_id)
         if not operation:
@@ -384,12 +389,19 @@ class FrontierStore:
         self._require_project_session(project_id, session_id)
         job_id = str(uuid.uuid4())
         self.connection.execute(
-            """INSERT INTO jobs(id, project_id, session_id, operation, state, request_json, created_at)
-               VALUES (?, ?, ?, ?, 'queued', ?, ?)""",
-            (job_id, project_id, session_id, operation, _json(request), _utc_now()),
+            """INSERT INTO jobs(id, project_id, session_id, parent_job_id, operation, state, request_json, created_at)
+               VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)""",
+            (job_id, project_id, session_id, parent_job_id, operation, _json(request), _utc_now()),
         )
         self.connection.commit()
         return job_id
+
+    def retry_job(self, job_id: str) -> dict[str, object]:
+        job = self.job(job_id)
+        if job["state"] not in {"failed", "cancelled"}:
+            raise ValueError("Only failed or cancelled jobs can be retried.")
+        retry_id = self.create_job(str(job["project_id"]), str(job["operation"]), job["request"], str(job["session_id"]) if job["session_id"] else None, job_id)
+        return self.job(retry_id)
 
     def claim_next_job(self) -> dict[str, object] | None:
         self.connection.execute("BEGIN IMMEDIATE")
@@ -592,6 +604,7 @@ def _job_record(row: sqlite3.Row) -> dict[str, object]:
         "id": row["id"],
         "project_id": row["project_id"],
         "session_id": row["session_id"],
+        "parent_job_id": row["parent_job_id"],
         "operation": row["operation"],
         "state": row["state"],
         "request": json.loads(row["request_json"]),
