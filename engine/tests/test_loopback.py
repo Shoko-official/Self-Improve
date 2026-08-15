@@ -7,6 +7,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from unittest.mock import patch
 
+from frontier_engine.agent_state import AgentStateStore
 from frontier_engine.loopback import LoopbackService
 from frontier_engine.store import FrontierStore
 
@@ -67,6 +68,19 @@ class LoopbackTests(unittest.TestCase):
                 response = self._rpc(service, {"jsonrpc": "2.0", "id": 4, "method": "job.retry", "params": {"job_id": job_id}})
                 self.assertEqual(response["result"]["parent_job_id"], job_id)
                 self.assertEqual(response["result"]["state"], "queued")
+            finally: service.close()
+
+    def test_rpc_agent_run_rejects_an_unavailable_runtime_and_records_activity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); store = FrontierStore(root); project_id = store.create_project("RPC"); store.close()
+            service = LoopbackService(data_root=root); service.start()
+            try:
+                with patch("frontier_engine.agent_runner.stream_ollama", side_effect=RuntimeError("FR-RUNTIME-OLLAMA-NOT-FOUND")):
+                    response = self._rpc(service, {"jsonrpc": "2.0", "id": 5, "method": "agent.run", "params": {"project_id": project_id, "model": "qwen3", "prompt": "Run fixture"}})
+                self.assertEqual(response["error"]["code"], -32000)
+                state = AgentStateStore(root / "agent.sqlite3")
+                try: self.assertEqual(state.tool_calls(project_id)[0]["state"], "failed")
+                finally: state.close()
             finally: service.close()
 
     def _rpc(self, service: LoopbackService, body: dict[str, object]) -> dict[str, object]:

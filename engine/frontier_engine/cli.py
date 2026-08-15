@@ -342,8 +342,37 @@ def workspace_tool(root: Path, project_id: str, workspace: Path, action: str, re
 
 
 def run_agent(root: Path, project_id: str, model: str, prompt: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: store.require_active_project(project_id)
+    finally: store.close()
     state = AgentStateStore(root / "agent.sqlite3")
     try: return run_local_agent(state, project_id, model, prompt)
+    finally: state.close()
+
+
+def agent_activity(root: Path, project_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: store.require_active_project(project_id)
+    finally: store.close()
+    state = AgentStateStore(root / "agent.sqlite3")
+    try:
+        tool_calls = [
+            {
+                "id": row["id"],
+                "tool_name": row["tool_name"],
+                "created_at": row["created_at"],
+                "request": json.loads(row["request"]),
+                "state": row["state"],
+                "result": json.loads(row["result"]),
+            }
+            for row in state.tool_calls(project_id)
+        ]
+        return {
+            "project_id": project_id,
+            "plan": state.plan(project_id),
+            "todos": [todo.__dict__ for todo in state.todos(project_id)],
+            "tool_calls": tool_calls,
+        }
     finally: state.close()
 
 
@@ -488,7 +517,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -647,6 +676,10 @@ def main() -> None:
         if args.project_id is None or args.model is None or args.prompt is None:
             parser.error("agent-run requires --project-id, --model, and --prompt")
         result = run_agent(root, args.project_id, args.model, args.prompt)
+    elif args.command == "agent-activity":
+        if args.project_id is None:
+            parser.error("agent-activity requires --project-id")
+        result = agent_activity(root, args.project_id)
     elif args.command == "generations":
         result = generations(root, args.project_id, args.generation_id)
     elif args.command == "generate-local":

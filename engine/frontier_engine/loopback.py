@@ -67,6 +67,9 @@ class LoopbackService:
             try: return store.retry_job(_required_string(params, "job_id"))
             finally: store.close()
         if method == "agent.run":
+            store = FrontierStore(self.data_root)
+            try: store.require_active_project(_required_string(params, "project_id"))
+            finally: store.close()
             state = AgentStateStore(self.data_root / "agent.sqlite3")
             try: return run_local_agent(state, _required_string(params, "project_id"), _required_string(params, "model"), _required_string(params, "prompt"))
             finally: state.close()
