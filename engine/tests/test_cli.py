@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, project_folders, projects, revoke_project_folder, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, project_folders, projects, retry_job, revoke_project_folder, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -103,6 +103,15 @@ class CliTests(unittest.TestCase):
             job = enqueue_job(root, project_id, "rag.ingest")
             self.assertEqual(jobs(root)["jobs"][0]["state"], "queued")
             self.assertEqual(cancel_job(root, job["id"])["state"], "cancelled")
+
+    def test_cancelled_jobs_can_be_retried_without_mutating_the_first_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir); project_id = create_project(root, "Jobs")["id"]
+            first = enqueue_job(root, project_id, "rag.ingest")
+            cancel_job(root, first["id"])
+            retry = retry_job(root, first["id"])
+            self.assertEqual(retry["parent_job_id"], first["id"])
+            self.assertEqual(retry["state"], "queued")
 
     def test_generations_are_listed_and_unsupported_runtime_is_diagnostic(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -60,6 +60,10 @@ class LoopbackService:
             store = FrontierStore(self.data_root)
             try: return store.job(_required_string(params, "job_id"))
             finally: store.close()
+        if method == "job.retry":
+            store = FrontierStore(self.data_root)
+            try: return store.retry_job(_required_string(params, "job_id"))
+            finally: store.close()
         raise RuntimeError("FR-RPC-METHOD-NOT-FOUND")
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:

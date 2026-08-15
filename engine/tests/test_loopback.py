@@ -59,6 +59,16 @@ class LoopbackTests(unittest.TestCase):
                 self.assertEqual(response["result"]["diagnostic"]["code"], "FR-RUNTIME-OLLAMA-NOT-FOUND")
             finally: service.close()
 
+    def test_rpc_retries_a_terminal_job_with_a_parent_link(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); store = FrontierStore(root); project_id = store.create_project("RPC"); job_id = store.create_job(project_id, "rag.ingest", {}); store.claim_job(job_id); store.fail_job(job_id, {"code": "FR-FAIL"}); store.close()
+            service = LoopbackService(data_root=root); service.start()
+            try:
+                response = self._rpc(service, {"jsonrpc": "2.0", "id": 4, "method": "job.retry", "params": {"job_id": job_id}})
+                self.assertEqual(response["result"]["parent_job_id"], job_id)
+                self.assertEqual(response["result"]["state"], "queued")
+            finally: service.close()
+
     def _rpc(self, service: LoopbackService, body: dict[str, object]) -> dict[str, object]:
         request = Request(f"{service.url}/rpc", data=json.dumps(body).encode(), headers={"Authorization": f"Bearer {service.token}", "Content-Type": "application/json"}, method="POST")
         return json.load(urlopen(request))

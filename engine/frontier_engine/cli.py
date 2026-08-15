@@ -266,6 +266,12 @@ def cancel_job(root: Path, job_id: str) -> dict[str, object]:
     return job
 
 
+def retry_job(root: Path, job_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: return store.retry_job(job_id)
+    finally: store.close()
+
+
 def generations(root: Path, project_id: str | None = None, generation_id: str | None = None) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -475,7 +481,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "agent-workspace", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -618,6 +624,10 @@ def main() -> None:
         if args.job_id is None:
             parser.error("cancel-job requires --job-id")
         result = cancel_job(root, args.job_id)
+    elif args.command == "retry-job":
+        if args.job_id is None:
+            parser.error("retry-job requires --job-id")
+        result = retry_job(root, args.job_id)
     elif args.command == "shell-exec":
         if args.project_id is None or args.working_directory is None or args.shell_arg is None:
             parser.error("shell-exec requires --project-id, --working-directory, and one or more --shell-arg values")

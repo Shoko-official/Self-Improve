@@ -101,6 +101,17 @@ class FrontierStoreTests(unittest.TestCase):
         self.assertEqual(job["state"], "failed")
         self.assertEqual(job["diagnostic"]["code"], "FR-MEM-OOM")
 
+    def test_terminal_jobs_retry_as_linked_immutable_attempts(self) -> None:
+        project_id = self.store.create_project("Retries")
+        job_id = self.store.create_job(project_id, "rag.ingest", {"source": "paper.pdf"})
+        self.store.claim_job(job_id); self.store.fail_job(job_id, {"code": "FR-FAIL"})
+        retry = self.store.retry_job(job_id)
+        self.assertEqual(retry["state"], "queued")
+        self.assertEqual(retry["parent_job_id"], job_id)
+        self.assertEqual(retry["request"], {"source": "paper.pdf"})
+        with self.assertRaisesRegex(ValueError, "Only failed"):
+            self.store.retry_job(retry["id"])
+
     def test_active_jobs_keep_durable_ordered_events(self) -> None:
         project_id = self.store.create_project("Runtime install")
         job_id = self.store.create_job(project_id, "runtime.ollama.pull", {"model": "qwen3"})
