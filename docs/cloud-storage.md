@@ -10,4 +10,6 @@ Profiles define a storage type, endpoint, exact container, prefix, and a credent
 
 Credential handles are names only, for example `cloud.primary -> FRONTIER_CLOUD_PRIMARY`. Frontier reports availability without revealing values and resolves the environment-backed value only at the execution boundary. Missing handles fail with `FR-CREDENTIAL-MISSING`; values are never placed in manifests, policy files, logs, or diagnostics.
 
+`sign_s3_request` provides deterministic AWS SigV4 headers for S3-compatible HTTPS endpoints when a caller injects credentials at execution time. The signer returns authorization headers only, never serializes the secret key, and rejects non-HTTPS endpoints. It is a signing primitive; provider-specific pagination, retries, and credential retrieval remain outside the signer.
+
 The local fixture adapter accepts a `file://` endpoint and executes approved export/delete or integrity-checked import operations atomically, without credentials or network access. The same boundary is available through `frontierctl storage-transfer` and the trusted desktop bridge. It is useful for deterministic tests of transfer state and checksums. It does not claim live S3, GCS, or Azure transfers.
