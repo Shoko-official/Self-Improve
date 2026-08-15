@@ -324,6 +324,28 @@ class FrontierStore:
             for row in rows
         ]
 
+    def search_artifacts(self, query: str, project_id: str | None = None, media_type: str | None = None) -> list[dict[str, object]]:
+        query = query.strip()
+        if not query:
+            raise ValueError("Artifact search query is required.")
+        conditions = ["instr(lower(a.name), lower(?)) > 0"]
+        parameters: list[object] = [query]
+        if project_id is not None:
+            conditions.append("a.project_id = ?")
+            parameters.append(project_id)
+        if media_type is not None:
+            conditions.append("a.media_type = ?")
+            parameters.append(media_type)
+        rows = self.connection.execute(
+            f"""SELECT a.id, a.project_id, a.session_id, a.name, a.media_type, a.created_at,
+                       v.version_number AS latest_version, v.content_hash AS latest_content_hash
+                FROM artifacts a LEFT JOIN artifact_versions v ON v.id = (
+                    SELECT id FROM artifact_versions WHERE artifact_id = a.id ORDER BY version_number DESC LIMIT 1
+                ) WHERE {' AND '.join(conditions)} ORDER BY a.created_at DESC, a.id DESC""",
+            parameters,
+        )
+        return [dict(row) for row in rows]
+
     def create_job(
         self,
         project_id: str,

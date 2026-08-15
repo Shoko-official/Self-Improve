@@ -290,6 +290,13 @@ def artifact_versions(root: Path, artifact_id: str) -> dict[str, object]:
     return {"artifact_id": artifact_id, "versions": versions}
 
 
+def search_artifacts(root: Path, query: str, project_id: str | None = None, media_type: str | None = None) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: records = store.search_artifacts(query, project_id, media_type)
+    finally: store.close()
+    return {"query": query, "project_id": project_id, "media_type": media_type, "artifacts": records}
+
+
 def literature_queries(root: Path) -> dict[str, object]:
     store = LiteratureStore(root / "literature.sqlite3")
     try: return {"queries": store.queries()}
@@ -393,7 +400,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -524,6 +531,10 @@ def main() -> None:
         if args.project_id is None:
             parser.error("artifacts requires --project-id")
         result = create_artifact(root, args.project_id, args.name, args.media_type, args.content) if args.name is not None and args.media_type is not None else artifacts(root, args.project_id)
+    elif args.command == "search-artifacts":
+        if args.query is None:
+            parser.error("search-artifacts requires --query")
+        result = search_artifacts(root, args.query, args.project_id, args.media_type)
     elif args.command == "artifact-versions":
         if args.artifact_id is None:
             parser.error("artifact-versions requires --artifact-id")

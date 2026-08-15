@@ -26,7 +26,7 @@
 | Science parity | not_verifiable_here | Baseline matrix created |
 | Windows package | not_verifiable_here | Tauri release build is blocked by the host application-control policy while executing a Rust build script: `os error 4551` |
 | Science projects | partially_verified | SQLite project/session lifecycle, instructions, constrained compact/standard/extended reasoning effort, literal session search, exact-scoped local folder grants, intra-project forks, session state, and archive write protection are covered by `engine/tests/test_store.py`; the desktop Workspaces view exposes project/session records through debug-only IPC |
-| Scientific artifacts | partially_verified | Append-only versions, SHA-256 content storage, and independent provenance fields are covered by `engine/tests/test_store.py` |
+| Scientific artifacts | partially_verified | Append-only versions, SHA-256 content storage, independent provenance fields, and literal local discovery with latest-version metadata are covered by `engine/tests/test_store.py`; the desktop Artifacts workspace invokes that local discovery through debug-only IPC |
 | Jobs | partially_verified | Durable queue, claim, success/failure, and cooperative cancellation state transitions are covered by `engine/tests/test_store.py` |
 | RAG | partially_verified | Durable ingestion, exact citations, lexical and injected-embedder hybrid contracts, and held-out source recall are covered by `engine/tests/test_rag.py` |
 | Scientific claims | partially_verified | Typed claims preserve uncertainty, lifecycle status, and exact evidence URI/selector links in `engine/tests/test_claims.py`; the desktop Science workspace creates, lists, and updates local claims through debug-only IPC |
