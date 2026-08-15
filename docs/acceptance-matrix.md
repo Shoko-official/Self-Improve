@@ -13,6 +13,7 @@
 | Annotations | partially_verified | Exact artifact-version targets, selectors, batch consumption, and no-retarget behavior are covered by `engine/tests/test_annotations.py` |
 | Science remote compute | partially_verified | Local subprocess fixture and approval-gated remote plan contracts are covered by `engine/tests/test_compute.py`; no live remote host is claimed |
 | Science cloud storage | partially_verified | Scoped S3/S3-compatible/GCS/Azure profile contracts, manifests, checksums, and write/delete approval gates are covered by `engine/tests/test_storage.py`; no live transfer is claimed |
+| MCP | partially_verified | Stdio JSON-RPC initialize, typed tool discovery, structured read-only result, and unknown-tool rejection are covered by `engine/tests/test_mcp_server.py` |
 | Remote providers | not_verifiable_here | No credential or provider configured |
 | OpenAI-compatible/NIM provider contracts | partially_verified | Real HTTP health, model discovery, streaming, and explicit egress-approval contracts are covered by `engine/tests/test_providers.py` |
 | Science parity | not_verifiable_here | Baseline matrix created |
