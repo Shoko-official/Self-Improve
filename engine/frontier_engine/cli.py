@@ -23,7 +23,7 @@ from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
 from frontier_engine.model_registry import HuggingFaceHub, ModelRegistry
-from frontier_engine.environments import create_python_environment, list_manifests, probe_environment
+from frontier_engine.environments import create_python_environment, install_python_packages, list_manifests, probe_environment
 from frontier_engine.generation import run_generation
 from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
 from frontier_engine.runtimes import stream_ollama
@@ -573,12 +573,13 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "install-packages", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--name")
+    parser.add_argument("--package", action="append")
     parser.add_argument("--project-id")
     parser.add_argument("--folder", type=Path)
     parser.add_argument("--folder-operation", choices=("read", "write"))
@@ -681,6 +682,10 @@ def main() -> None:
         if args.name is None:
             parser.error("create-environment requires --name")
         result = create_python_environment(root, args.name)
+    elif args.command == "install-packages":
+        if args.name is None or not args.package:
+            parser.error("install-packages requires --name and one or more --package")
+        result = install_python_packages(root, args.name, args.package)
     elif args.command == "projects":
         result = create_project(root, args.name, args.instructions or "") if args.name is not None else projects(root)
     elif args.command == "set-project-instructions":
