@@ -9,10 +9,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 from urllib.parse import unquote, urlparse
+from urllib.parse import quote
 import urllib.error
 import urllib.request
 import json
 import xml.etree.ElementTree as ET
+from frontier_engine.s3_signing import S3Credentials, sign_s3_request
 
 StorageKind=Literal["s3","s3_compatible","gcs","azure_blob"]
 @dataclass(frozen=True)
@@ -20,6 +22,29 @@ class StorageProfile: kind:StorageKind; endpoint:str; container:str; prefix:str;
 @dataclass(frozen=True)
 class TransferManifest: profile:StorageProfile; object_key:str; bytes:int; sha256:str; operation:Literal["import","export","delete"]; egress_bytes:int; content:bytes=b""
 class StorageApprovalRequired(PermissionError): pass
+
+def execute_s3_signed_transfer(manifest:TransferManifest, region:str, credentials:S3Credentials, approved:bool, timeout_seconds:float=30.0)->dict[str,object]:
+ if manifest.profile.kind not in {"s3","s3_compatible"}: raise ValueError("FR-S3-TRANSFER-KIND: S3-compatible profile required")
+ endpoint=manifest.profile.endpoint.rstrip("/")
+ if timeout_seconds <= 0: raise ValueError("FR-S3-TRANSFER-TIMEOUT: timeout must be positive")
+ authorize_transfer(manifest, approved)
+ if not endpoint.startswith("https://"): raise ValueError("FR-S3-TRANSFER-HTTPS: signed transfers require HTTPS")
+ if not manifest.object_key.startswith(manifest.profile.prefix): raise ValueError("FR-STORAGE-SCOPE: object is outside granted prefix")
+ url=f"{endpoint}/{quote(manifest.profile.container, safe='-_.~')}/{quote(manifest.object_key, safe='/~-_.')}"
+ method={"import":"GET","export":"PUT","delete":"DELETE"}[manifest.operation]
+ signed=sign_s3_request(method, url, region, credentials, payload=manifest.content)
+ request=urllib.request.Request(url, data=manifest.content if method == "PUT" else None, method=method, headers=signed.headers)
+ try:
+  with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+   data=response.read() if method == "GET" else b""
+ except urllib.error.HTTPError as error:
+  raise ValueError(f"FR-S3-TRANSFER-HTTP:{error.code}") from error
+ except (urllib.error.URLError, TimeoutError) as error:
+  raise ValueError(f"FR-S3-TRANSFER-NETWORK:{error}") from error
+ if method == "GET" and (len(data) != manifest.bytes or hashlib.sha256(data).hexdigest() != manifest.sha256): raise ValueError("FR-STORAGE-INTEGRITY: checksum or byte count mismatch")
+ result={"state":"succeeded","operation":manifest.operation,"object_key":manifest.object_key,"bytes":len(data) if method == "GET" else manifest.bytes,"sha256":hashlib.sha256(data if method == "GET" else manifest.content).hexdigest()}
+ if method == "GET": result["content"]=data
+ return result
 
 def list_presigned_objects(profile:StorageProfile, presigned_url:str, approved:bool, max_bytes:int=1_000_000, timeout_seconds:float=30.0)->dict[str,object]:
  if profile.kind not in {"s3","s3_compatible","gcs","azure_blob"}: raise ValueError("FR-STORAGE-KIND: unsupported storage kind")
