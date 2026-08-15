@@ -17,5 +17,7 @@ describe("translate", () => {
     expect(surfaceText("en", "createProject")).toBe("Create project");
     expect(surfaceText("fr", "createProject")).toBe("Créer le projet");
     expect(surfaceText("fr", "refreshProjectLedger")).toBe("Actualiser le registre des projets");
+    expect(surfaceText("en", "runEvidenceReview")).toBe("Run evidence review");
+    expect(surfaceText("fr", "saveAnnotation")).toBe("Enregistrer l’annotation");
   });
 });
