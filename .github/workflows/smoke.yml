@@ -29,5 +29,7 @@ jobs:
       - run: python -m compileall -q engine
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - run: cargo check
         working-directory: src-tauri
