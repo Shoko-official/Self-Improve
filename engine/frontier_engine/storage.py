@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 from urllib.parse import unquote, urlparse
+import urllib.error
+import urllib.request
 
 StorageKind=Literal["s3","s3_compatible","gcs","azure_blob"]
 @dataclass(frozen=True)
@@ -16,6 +18,20 @@ class StorageProfile: kind:StorageKind; endpoint:str; container:str; prefix:str;
 @dataclass(frozen=True)
 class TransferManifest: profile:StorageProfile; object_key:str; bytes:int; sha256:str; operation:Literal["import","export","delete"]; egress_bytes:int; content:bytes=b""
 class StorageApprovalRequired(PermissionError): pass
+
+def probe_remote_storage(profile:StorageProfile, approved:bool, timeout_seconds:float=10.0)->dict[str,object]:
+ if profile.kind not in {"s3","s3_compatible","gcs","azure_blob"}: raise ValueError("FR-STORAGE-KIND: unsupported storage kind")
+ if not profile.endpoint.startswith(("https://","http://")): raise ValueError("FR-STORAGE-ENDPOINT: remote probe requires an HTTP endpoint")
+ if not approved: raise StorageApprovalRequired("FR-STORAGE-EGRESS-APPROVAL: remote connectivity requires explicit approval")
+ if timeout_seconds <= 0: raise ValueError("FR-STORAGE-TIMEOUT: timeout must be positive")
+ request=urllib.request.Request(profile.endpoint, method="HEAD")
+ try:
+  with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+   return {"state":"reachable","kind":profile.kind,"endpoint":profile.endpoint,"status":response.status}
+ except urllib.error.HTTPError as error:
+  return {"state":"reachable","kind":profile.kind,"endpoint":profile.endpoint,"status":error.code,"authentication_required":error.code in {401,403}}
+ except (urllib.error.URLError, TimeoutError) as error:
+  return {"state":"unreachable","kind":profile.kind,"endpoint":profile.endpoint,"code":"FR-STORAGE-PROBE-FAILED","detail":str(error)}
 
 def build_manifest(profile:StorageProfile, object_key:str, content:bytes, operation:Literal["import","export","delete"], egress_bytes:int=0)->TransferManifest:
  if not object_key.startswith(profile.prefix): raise ValueError("FR-STORAGE-SCOPE: object is outside granted prefix")
