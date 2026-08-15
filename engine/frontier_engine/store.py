@@ -343,6 +343,8 @@ class FrontierStore:
         ).fetchall()
         return [
             {
+                "id": row["id"],
+                "artifact_id": row["artifact_id"],
                 "version": row["version_number"],
                 "content_hash": row["content_hash"],
                 "content_path": row["content_path"],

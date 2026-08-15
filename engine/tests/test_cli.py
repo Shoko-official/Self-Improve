@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import agent_activity, archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, project_folders, projects, retry_job, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
+from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, project_folders, projects, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -179,6 +179,21 @@ class CliTests(unittest.TestCase):
             artifact = create_artifact(root, project_id, "result.md", "text/markdown", "# Result")
             self.assertEqual(artifacts(root, project_id)["artifacts"][0]["name"], "result.md")
             self.assertEqual(artifact_versions(root, artifact["id"])["versions"][0]["execution_log"]["state"], "not_executed")
+
+    def test_annotations_require_an_exact_artifact_version_and_consume_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); project_id = create_project(root, "Annotations")["id"]; artifact = create_artifact(root, project_id, "result.md", "text/markdown", "# Result")
+            version_id = artifact_versions(root, artifact["id"])["versions"][0]["id"]
+            created = create_annotation(root, version_id, "markdown", '{"offset": 2}', "Clarify this result")
+            self.assertEqual(annotations(root, version_id)["annotations"][0]["id"], created["id"])
+            self.assertEqual(consume_annotations(root, (created["id"],))["annotations"][0]["body"], "Clarify this result")
+            with self.assertRaises(ValueError): consume_annotations(root, (created["id"],))
+            with self.assertRaises(KeyError): create_annotation(root, "missing-version", "text", "{}", "No target")
+
+    def test_reviewer_cli_returns_evidence_gap_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); create_claim(root, "computed", "Mean was 4", "Fixture only", [])
+            self.assertEqual(review_scientific_claims(root)["findings"][0]["code"], "FR-REVIEW-UNTRACEABLE-COMPUTATION")
 
     def test_artifacts_are_searchable_by_literal_name_and_media_type(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
