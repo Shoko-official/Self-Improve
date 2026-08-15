@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, cancel_job, create_project, create_session, data_root, enqueue_job, export_data, import_data, jobs, projects, sessions, set_session_starred, status
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, create_artifact, create_project, create_session, data_root, enqueue_job, export_data, import_data, jobs, projects, sessions, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -81,3 +81,11 @@ class CliTests(unittest.TestCase):
             job = enqueue_job(root, project_id, "rag.ingest")
             self.assertEqual(jobs(root)["jobs"][0]["state"], "queued")
             self.assertEqual(cancel_job(root, job["id"])["state"], "cancelled")
+
+    def test_artifacts_keep_versions_and_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_id = create_project(root, "Artifacts")["id"]
+            artifact = create_artifact(root, project_id, "result.md", "text/markdown", "# Result")
+            self.assertEqual(artifacts(root, project_id)["artifacts"][0]["name"], "result.md")
+            self.assertEqual(artifact_versions(root, artifact["id"])["versions"][0]["execution_log"]["state"], "not_executed")
