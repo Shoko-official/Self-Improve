@@ -102,6 +102,16 @@ class FrontierStore:
                 started_at TEXT,
                 completed_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS job_events (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES jobs(id),
+                sequence_number INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                detail_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(job_id, sequence_number)
+            );
+            CREATE INDEX IF NOT EXISTS job_events_by_job ON job_events(job_id, sequence_number);
             CREATE TABLE IF NOT EXISTS generations (
                 id TEXT PRIMARY KEY,
                 job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id),
@@ -497,11 +507,41 @@ class FrontierStore:
         self._set_job_state(job_id, "failed", diagnostic=diagnostic, completed_at=_utc_now())
         return self.job(job_id)
 
+    def append_job_event(self, job_id: str, kind: str, detail: Mapping[str, object]) -> None:
+        job = self.job(job_id)
+        if job["state"] not in {"running", "cancel_requested"}:
+            raise ValueError("Job events can only be appended while a job is active.")
+        if not kind.strip():
+            raise ValueError("A job event kind is required.")
+        sequence_number = self.connection.execute(
+            "SELECT COALESCE(MAX(sequence_number), -1) + 1 AS sequence_number FROM job_events WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()["sequence_number"]
+        self.connection.execute(
+            "INSERT INTO job_events(id, job_id, sequence_number, kind, detail_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), job_id, sequence_number, kind, _json(detail), _utc_now()),
+        )
+        self.connection.commit()
+
+    def job_events(self, job_id: str) -> list[dict[str, object]]:
+        if self.connection.execute("SELECT 1 FROM jobs WHERE id = ?", (job_id,)).fetchone() is None:
+            raise KeyError(f"Job not found: {job_id}")
+        rows = self.connection.execute(
+            "SELECT id, sequence_number, kind, detail_json, created_at FROM job_events WHERE job_id = ? ORDER BY sequence_number",
+            (job_id,),
+        )
+        return [
+            {"id": row["id"], "sequence_number": row["sequence_number"], "kind": row["kind"], "detail": json.loads(row["detail_json"]), "created_at": row["created_at"]}
+            for row in rows
+        ]
+
     def job(self, job_id: str) -> dict[str, object]:
         row = self.connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if row is None:
             raise KeyError(f"Job not found: {job_id}")
-        return _job_record(row)
+        record = _job_record(row)
+        record["events"] = self.job_events(job_id)
+        return record
 
     def _set_job_state(
         self,

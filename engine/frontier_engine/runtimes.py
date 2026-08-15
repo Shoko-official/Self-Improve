@@ -73,3 +73,27 @@ def stream_ollama(model: str, prompt: str) -> Iterator[str]:
     finally:
         if process.poll() is None:
             process.terminate()
+
+
+def stream_ollama_pull(model: str) -> Iterator[str]:
+    """Yield local Ollama pull output without selecting a fallback model."""
+    model = model.strip()
+    if not model:
+        raise ValueError("An Ollama model identifier is required.")
+    executable = shutil.which("ollama")
+    if executable is None:
+        raise LocalRuntimeUnavailable("FR-RUNTIME-OLLAMA-NOT-FOUND")
+    try:
+        subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=5, check=True)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise LocalRuntimeUnavailable("FR-RUNTIME-OLLAMA-UNHEALTHY") from error
+    process = subprocess.Popen([executable, "pull", model], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        if process.stdout is None:
+            raise RuntimeError("FR-RUNTIME-OLLAMA-PULL-STREAM-MISSING")
+        yield from process.stdout
+        if process.wait() != 0:
+            raise RuntimeError("FR-RUNTIME-OLLAMA-PULL-FAILED")
+    finally:
+        if process.poll() is None:
+            process.terminate()

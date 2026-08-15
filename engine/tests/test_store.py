@@ -100,3 +100,14 @@ class FrontierStoreTests(unittest.TestCase):
         job = self.store.fail_job(job_id, {"code": "FR-MEM-OOM", "evidence": ["allocator refused reservation"]})
         self.assertEqual(job["state"], "failed")
         self.assertEqual(job["diagnostic"]["code"], "FR-MEM-OOM")
+
+    def test_active_jobs_keep_durable_ordered_events(self) -> None:
+        project_id = self.store.create_project("Runtime install")
+        job_id = self.store.create_job(project_id, "runtime.ollama.pull", {"model": "qwen3"})
+        self.store.claim_job(job_id)
+        self.store.append_job_event(job_id, "progress", {"output": "pulling manifest"})
+        self.store.append_job_event(job_id, "progress", {"output": "pulling layers"})
+        self.store.complete_job(job_id, {"model": "qwen3"})
+        self.assertEqual([event["sequence_number"] for event in self.store.job_events(job_id)], [0, 1])
+        with self.assertRaisesRegex(ValueError, "active"):
+            self.store.append_job_event(job_id, "progress", {"output": "late"})

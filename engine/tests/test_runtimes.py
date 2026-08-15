@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from frontier_engine.runtimes import LocalRuntimeUnavailable, RuntimeManifest, probe_ollama, stream_ollama
+from frontier_engine.runtimes import LocalRuntimeUnavailable, RuntimeManifest, probe_ollama, stream_ollama, stream_ollama_pull
 
 
 class RuntimeTests(unittest.TestCase):
@@ -28,3 +28,8 @@ class RuntimeTests(unittest.TestCase):
         with patch("frontier_engine.runtimes.probe_ollama", return_value={"available": False, "reason": "FR-RUNTIME-OLLAMA-NOT-FOUND"}):
             with self.assertRaisesRegex(LocalRuntimeUnavailable, "NOT-FOUND"):
                 next(stream_ollama("missing", "hello"))
+
+    def test_pull_refuses_a_missing_runtime_without_a_fallback(self) -> None:
+        with patch("frontier_engine.runtimes.shutil.which", return_value=None):
+            with self.assertRaisesRegex(LocalRuntimeUnavailable, "NOT-FOUND"):
+                next(stream_ollama_pull("qwen3"))
