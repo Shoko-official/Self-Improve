@@ -16,6 +16,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from frontier_engine.__main__ import doctor
+from frontier_engine.annotations import AnnotationStore
 from frontier_engine.agent_state import AgentStateStore
 from frontier_engine.agent_runner import run_local_agent
 from frontier_engine.claims import ClaimLedger
@@ -29,6 +30,7 @@ from frontier_engine.runtimes import stream_ollama
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 from frontier_engine.workspace_tools import ProjectWorkspaceTools
+from frontier_engine.reviewer import Claim, review_claims
 
 
 _BACKGROUND_PROCESSES: dict[int, subprocess.Popen[bytes]] = {}
@@ -422,6 +424,45 @@ def artifact_versions(root: Path, artifact_id: str) -> dict[str, object]:
     return {"artifact_id": artifact_id, "versions": versions}
 
 
+def _require_artifact_version(root: Path, version_id: str) -> None:
+    store = FrontierStore(root)
+    try:
+        if store.connection.execute("SELECT 1 FROM artifact_versions WHERE id = ?", (version_id,)).fetchone() is None:
+            raise KeyError(f"Artifact version not found: {version_id}")
+    finally: store.close()
+
+
+def create_annotation(root: Path, version_id: str, target_kind: str, selector: str, body: str) -> dict[str, object]:
+    _require_artifact_version(root, version_id)
+    annotation = AnnotationStore(root / "annotations.sqlite3")
+    try:
+        identifier = annotation.create(version_id, target_kind, json.loads(selector), body)
+        return {"id": identifier, "artifact_version_id": version_id, "target_kind": target_kind, "selector": json.loads(selector), "body": body}
+    finally: annotation.close()
+
+
+def annotations(root: Path, version_id: str) -> dict[str, object]:
+    _require_artifact_version(root, version_id)
+    annotation = AnnotationStore(root / "annotations.sqlite3")
+    try: return {"artifact_version_id": version_id, "annotations": [item.__dict__ for item in annotation.list_open(version_id)]}
+    finally: annotation.close()
+
+
+def consume_annotations(root: Path, annotation_ids: tuple[str, ...]) -> dict[str, object]:
+    annotation = AnnotationStore(root / "annotations.sqlite3")
+    try: return {"annotations": [item.__dict__ for item in annotation.consume(annotation_ids)]}
+    finally: annotation.close()
+
+
+def review_scientific_claims(root: Path) -> dict[str, object]:
+    ledger = ClaimLedger(root / "claims.sqlite3")
+    try:
+        records = ledger.list()
+        claims = tuple(Claim(str(record["id"]), str(record["text"]), str(record["claim_type"]), tuple(str(item["evidence_uri"]) for item in record["evidence"])) for record in records)
+        return {"findings": [finding.__dict__ for finding in review_claims(claims)]}
+    finally: ledger.close()
+
+
 def search_artifacts(root: Path, query: str, project_id: str | None = None, media_type: str | None = None) -> dict[str, object]:
     store = FrontierStore(root)
     try: records = store.search_artifacts(query, project_id, media_type)
@@ -532,7 +573,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -567,6 +608,11 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--prompt")
     parser.add_argument("--artifact-id")
+    parser.add_argument("--artifact-version-id")
+    parser.add_argument("--target-kind")
+    parser.add_argument("--selector")
+    parser.add_argument("--body")
+    parser.add_argument("--annotation-id", action="append")
     parser.add_argument("--media-type")
     parser.add_argument("--content", default="")
     parser.add_argument("--query")
@@ -732,6 +778,21 @@ def main() -> None:
         if args.artifact_id is None:
             parser.error("artifact-versions requires --artifact-id")
         result = artifact_versions(root, args.artifact_id)
+    elif args.command == "annotations":
+        if args.artifact_version_id is None:
+            parser.error("annotations requires --artifact-version-id")
+        if args.target_kind is not None or args.selector is not None or args.body is not None:
+            if args.target_kind is None or args.selector is None or args.body is None:
+                parser.error("annotation creation requires --target-kind, --selector, and --body")
+            result = create_annotation(root, args.artifact_version_id, args.target_kind, args.selector, args.body)
+        else:
+            result = annotations(root, args.artifact_version_id)
+    elif args.command == "consume-annotations":
+        if not args.annotation_id:
+            parser.error("consume-annotations requires one or more --annotation-id")
+        result = consume_annotations(root, tuple(args.annotation_id))
+    elif args.command == "review":
+        result = review_scientific_claims(root)
     elif args.command == "literature":
         if args.query is None:
             result = literature_queries(root)
