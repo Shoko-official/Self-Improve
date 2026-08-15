@@ -34,5 +34,6 @@
 | Jobs | partially_verified | Durable queue, claim, success/failure, and cooperative cancellation state transitions are covered by `engine/tests/test_store.py` |
 | Local generation ledger | partially_verified | Requests, runtime and model identifiers, streamed text chunks, cancellation, completion, and failure diagnostics persist in SQLite and are covered by `engine/tests/test_generation.py`; live Ollama use remains capability-gated |
 | RAG | partially_verified | Durable ingestion, exact citations, lexical and injected-embedder hybrid contracts, and held-out source recall are covered by `engine/tests/test_rag.py` |
+| Multimodal attachments | partially_verified | Bounded local descriptors, SHA-256 identity, and explicit native versus derived 3D adaptation disclosure are covered by `engine/tests/test_attachments.py`; no provider egress is implied |
 | Scientific claims | partially_verified | Typed claims preserve uncertainty, lifecycle status, and exact evidence URI/selector links in `engine/tests/test_claims.py`; the desktop Science workspace creates, lists, and updates local claims through debug-only IPC |
 | Prompt compiler | partially_verified | Compact, standard, and extended variants have explicit budget checks in `engine/tests/test_prompts.py` |
