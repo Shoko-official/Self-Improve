@@ -19,6 +19,29 @@ class StorageProfile: kind:StorageKind; endpoint:str; container:str; prefix:str;
 class TransferManifest: profile:StorageProfile; object_key:str; bytes:int; sha256:str; operation:Literal["import","export","delete"]; egress_bytes:int; content:bytes=b""
 class StorageApprovalRequired(PermissionError): pass
 
+def execute_presigned_transfer(manifest:TransferManifest, presigned_url:str, approved:bool, timeout_seconds:float=30.0)->dict[str,object]:
+ if manifest.profile.kind not in {"s3","s3_compatible","gcs","azure_blob"}: raise ValueError("FR-STORAGE-KIND: unsupported storage kind")
+ parsed=urlparse(presigned_url)
+ profile_host=urlparse(manifest.profile.endpoint).hostname
+ if parsed.scheme not in {"https","http"} or not parsed.query: raise ValueError("FR-STORAGE-PRESIGNED-URL: a signed query URL is required")
+ if parsed.username or parsed.password or (profile_host and parsed.hostname != profile_host): raise ValueError("FR-STORAGE-PRESIGNED-URL: URL host or embedded credentials are invalid")
+ if timeout_seconds <= 0: raise ValueError("FR-STORAGE-TIMEOUT: timeout must be positive")
+ authorize_transfer(manifest, approved)
+ methods={"export":"PUT","import":"GET","delete":"DELETE"}; method=methods[manifest.operation]
+ request=urllib.request.Request(presigned_url, data=manifest.content if method == "PUT" else None, method=method)
+ if method == "PUT": request.add_header("Content-Type","application/octet-stream")
+ try:
+  with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+   data=response.read() if method == "GET" else b""
+ except urllib.error.HTTPError as error:
+  raise ValueError(f"FR-STORAGE-REMOTE-HTTP:{error.code}") from error
+ except (urllib.error.URLError, TimeoutError) as error:
+  raise ValueError(f"FR-STORAGE-REMOTE-NETWORK:{error}") from error
+ if method == "GET" and (len(data) != manifest.bytes or hashlib.sha256(data).hexdigest() != manifest.sha256): raise ValueError("FR-STORAGE-INTEGRITY: checksum or byte count mismatch")
+ result={"state":"succeeded","operation":manifest.operation,"object_key":manifest.object_key,"bytes":len(data) if method == "GET" else manifest.bytes,"sha256":hashlib.sha256(data if method == "GET" else manifest.content).hexdigest()}
+ if method == "GET": result["content"]=data
+ return result
+
 def probe_remote_storage(profile:StorageProfile, approved:bool, timeout_seconds:float=10.0)->dict[str,object]:
  if profile.kind not in {"s3","s3_compatible","gcs","azure_blob"}: raise ValueError("FR-STORAGE-KIND: unsupported storage kind")
  if not profile.endpoint.startswith(("https://","http://")): raise ValueError("FR-STORAGE-ENDPOINT: remote probe requires an HTTP endpoint")
