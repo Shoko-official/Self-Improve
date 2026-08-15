@@ -75,8 +75,28 @@ class LoopbackService:
         if method == "kernel.execute":
             project_id = _required_string(params, "project_id")
             self._require_active_project(project_id)
-            result = self._kernel(project_id).execute(_required_string(params, "code"))
-            return {"project_id": project_id, **result.__dict__}
+            code = _required_string(params, "code")
+            store = FrontierStore(self.data_root)
+            try:
+                job_id = store.create_job(project_id, "kernel.execute", {"code": code})
+                store.claim_job(job_id)
+                store.append_job_event(job_id, "kernel.started", {"kernel_state": self._kernel(project_id).state})
+                try:
+                    result = self._kernel(project_id).execute(code)
+                except RuntimeError as error:
+                    execution = {"state": "failed", "error": str(error), "stdout": "", "stderr": ""}
+                    store.append_job_event(job_id, "kernel.failed", execution)
+                    job = store.fail_job(job_id, {"code": "FR-KERNEL-EXECUTION-FAILED", "detail": str(error)})
+                    return {"project_id": project_id, "execution": execution, "job": job}
+                execution = result.__dict__
+                if result.state == "succeeded":
+                    store.append_job_event(job_id, "kernel.succeeded", execution)
+                    job = store.complete_job(job_id, execution)
+                else:
+                    store.append_job_event(job_id, "kernel.failed", execution)
+                    job = store.fail_job(job_id, {"code": "FR-KERNEL-EXECUTION-FAILED", "detail": result.error or "Kernel execution failed."})
+                return {"project_id": project_id, "execution": execution, "job": job}
+            finally: store.close()
         if method == "kernel.restart":
             project_id = _required_string(params, "project_id")
             self._require_active_project(project_id)
