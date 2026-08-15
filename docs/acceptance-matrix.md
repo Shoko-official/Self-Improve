@@ -3,6 +3,7 @@
 | Area | Status | Evidence |
 | --- | --- | --- |
 | Desktop launch | verified | `pnpm tauri dev` compiled `target\\debug\\frontier.exe` through the Visual Studio developer environment and launched it on 2026-08-15 |
+| French and English UI | partially_verified | The global language selector persists the chosen locale and localizes navigation, surface headings, and primary data-boundary status through tested `src/i18n.ts`; deeper form copy remains English while it is migrated to the same resolver |
 | Engine protocol | partially_verified | `python -m frontier_engine doctor` fixture plus debug-only desktop IPC; release correctly refuses the call until a managed Python runtime is bundled |
 | Local control plane | partially_verified | `frontierctl serve` starts an authenticated ephemeral-bearer status endpoint bound to `127.0.0.1`; background start, URL/status/log inspection, and bounded stop are covered by `engine/tests/test_cli.py`; tunnels and updates remain unimplemented |
 | Hardware probe | partially_verified | Static OS, architecture, and core probe implemented |
