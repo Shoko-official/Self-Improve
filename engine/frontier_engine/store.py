@@ -57,6 +57,15 @@ class FrontierStore:
                 starred INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS project_folder_grants (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(id),
+                path TEXT NOT NULL,
+                operation TEXT NOT NULL CHECK(operation IN ('read', 'write')),
+                created_at TEXT NOT NULL,
+                revoked_at TEXT,
+                UNIQUE(project_id, path, operation)
+            );
             CREATE TABLE IF NOT EXISTS artifacts (
                 id TEXT PRIMARY KEY,
                 project_id TEXT NOT NULL REFERENCES projects(id),
@@ -123,6 +132,60 @@ class FrontierStore:
         if result.rowcount != 1:
             raise ArchivedProjectError(f"Active project not found: {project_id}")
         self.connection.commit()
+
+    def grant_project_folder(self, project_id: str, folder: Path, operation: str) -> str:
+        self._require_active_project(project_id)
+        if operation not in {"read", "write"}:
+            raise ValueError("Folder grants support only read or write operations.")
+        folder = folder.resolve(strict=True)
+        if not folder.is_dir():
+            raise ValueError("Project folder grant requires an existing directory.")
+        existing = self.connection.execute(
+            "SELECT id, revoked_at FROM project_folder_grants WHERE project_id = ? AND path = ? AND operation = ?",
+            (project_id, str(folder), operation),
+        ).fetchone()
+        if existing is not None:
+            if existing["revoked_at"] is not None:
+                self.connection.execute("UPDATE project_folder_grants SET revoked_at = NULL, created_at = ? WHERE id = ?", (_utc_now(), existing["id"]))
+                self.connection.commit()
+            return str(existing["id"])
+        grant_id = str(uuid.uuid4())
+        self.connection.execute(
+            "INSERT INTO project_folder_grants(id, project_id, path, operation, created_at) VALUES (?, ?, ?, ?, ?)",
+            (grant_id, project_id, str(folder), operation, _utc_now()),
+        )
+        self.connection.commit()
+        return grant_id
+
+    def project_folder_grants(self, project_id: str) -> list[dict[str, object]]:
+        return [dict(row) for row in self.connection.execute(
+            "SELECT id, project_id, path, operation, created_at, revoked_at FROM project_folder_grants WHERE project_id = ? ORDER BY created_at, id",
+            (project_id,),
+        )]
+
+    def revoke_project_folder_grant(self, grant_id: str) -> None:
+        row = self.connection.execute("SELECT project_id FROM project_folder_grants WHERE id = ? AND revoked_at IS NULL", (grant_id,)).fetchone()
+        if row is None:
+            raise KeyError("Active project folder grant not found.")
+        self._require_active_project(str(row["project_id"]))
+        self.connection.execute("UPDATE project_folder_grants SET revoked_at = ? WHERE id = ?", (_utc_now(), grant_id))
+        self.connection.commit()
+
+    def authorize_project_path(self, project_id: str, target: Path, operation: str) -> bool:
+        self._require_active_project(project_id)
+        if operation not in {"read", "write"}:
+            return False
+        candidate = target.resolve(strict=False)
+        for grant in self.connection.execute(
+            "SELECT path FROM project_folder_grants WHERE project_id = ? AND operation = ? AND revoked_at IS NULL",
+            (project_id, operation),
+        ):
+            try:
+                candidate.relative_to(Path(grant["path"]))
+                return True
+            except ValueError:
+                continue
+        return False
 
     def create_session(
         self,

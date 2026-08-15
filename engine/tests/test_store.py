@@ -58,6 +58,19 @@ class FrontierStoreTests(unittest.TestCase):
         with self.assertRaises(ArchivedProjectError):
             self.store.set_project_instructions(project_id, "Changed")
 
+    def test_project_folder_grants_are_exact_scoped_and_revocable(self) -> None:
+        root = Path(self.temp_dir.name)
+        project_id = self.store.create_project("Folder scope")
+        granted = root / "granted"; granted.mkdir()
+        outside = root / "outside"; outside.mkdir()
+        grant_id = self.store.grant_project_folder(project_id, granted, "read")
+        self.assertEqual(self.store.grant_project_folder(project_id, granted, "read"), grant_id)
+        self.assertTrue(self.store.authorize_project_path(project_id, granted / "input.csv", "read"))
+        self.assertFalse(self.store.authorize_project_path(project_id, granted / "input.csv", "write"))
+        self.assertFalse(self.store.authorize_project_path(project_id, outside / "input.csv", "read"))
+        self.store.revoke_project_folder_grant(grant_id)
+        self.assertFalse(self.store.authorize_project_path(project_id, granted / "input.csv", "read"))
+
     def test_jobs_are_durable_and_cancellation_is_explicit(self) -> None:
         project_id = self.store.create_project("Jobs")
         job_id = self.store.create_job(project_id, "rag.ingest", {"source": "paper.pdf"})

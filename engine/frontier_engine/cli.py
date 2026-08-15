@@ -211,6 +211,27 @@ def archive_project(root: Path, project_id: str) -> dict[str, object]:
     return {"id": project_id, "archived": True}
 
 
+def project_folders(root: Path, project_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: grants = store.project_folder_grants(project_id)
+    finally: store.close()
+    return {"project_id": project_id, "grants": grants}
+
+
+def grant_project_folder(root: Path, project_id: str, folder: Path, operation: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: grant_id = store.grant_project_folder(project_id, folder, operation)
+    finally: store.close()
+    return {"id": grant_id, "project_id": project_id, "path": str(folder.resolve()), "operation": operation}
+
+
+def revoke_project_folder(root: Path, grant_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: store.revoke_project_folder_grant(grant_id)
+    finally: store.close()
+    return {"id": grant_id, "revoked": True}
+
+
 def jobs(root: Path) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -372,13 +393,16 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
     parser.add_argument("--destination", type=Path)
     parser.add_argument("--name")
     parser.add_argument("--project-id")
+    parser.add_argument("--folder", type=Path)
+    parser.add_argument("--folder-operation", choices=("read", "write"))
+    parser.add_argument("--folder-grant-id")
     parser.add_argument("--session-id")
     parser.add_argument("--title")
     parser.add_argument("--parent-session-id")
@@ -475,6 +499,18 @@ def main() -> None:
         if args.project_id is None:
             parser.error("archive-project requires --project-id")
         result = archive_project(root, args.project_id)
+    elif args.command == "project-folders":
+        if args.project_id is None:
+            parser.error("project-folders requires --project-id")
+        result = project_folders(root, args.project_id)
+    elif args.command == "grant-project-folder":
+        if args.project_id is None or args.folder is None or args.folder_operation is None:
+            parser.error("grant-project-folder requires --project-id, --folder, and --folder-operation")
+        result = grant_project_folder(root, args.project_id, args.folder, args.folder_operation)
+    elif args.command == "revoke-project-folder":
+        if args.folder_grant_id is None:
+            parser.error("revoke-project-folder requires --folder-grant-id")
+        result = revoke_project_folder(root, args.folder_grant_id)
     elif args.command == "jobs":
         if args.project_id is None or args.operation is None:
             result = jobs(root)

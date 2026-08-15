@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, import_data, jobs, projects, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, grant_project_folder, import_data, jobs, project_folders, projects, revoke_project_folder, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -86,6 +86,14 @@ class CliTests(unittest.TestCase):
             set_session_reasoning_effort(root, session["id"], "compact")
             found = search_sessions(root, "notebooks", project["id"])["sessions"]
             self.assertEqual(found[0]["reasoning_effort"], "compact")
+
+    def test_projects_can_grant_and_revoke_local_folders(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir); project = create_project(root, "Folder scope")
+            folder = root / "fixture"; folder.mkdir()
+            grant = grant_project_folder(root, project["id"], folder, "read")
+            self.assertEqual(project_folders(root, project["id"])["grants"][0]["path"], str(folder.resolve()))
+            self.assertTrue(revoke_project_folder(root, grant["id"])["revoked"])
 
     def test_jobs_can_be_enqueued_listed_and_cancelled(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
