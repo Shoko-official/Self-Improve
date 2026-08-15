@@ -27,7 +27,7 @@
 | Release gate | partially_verified | `scripts/release_gate.py` checks required files, acceptance-matrix areas, cross-platform CI configuration, and clean worktree evidence |
 | Automation | partially_verified | Durable definitions, dry-run history, and external-effect approval gates are covered by `engine/tests/test_automations.py` |
 | Operational UX | partially_verified | Durable lock-screen-safe notification records, deep links, and acknowledgement states are covered by `engine/tests/test_notifications.py` |
-| Remote providers | not_verifiable_here | No credential or provider configured |
+| Remote providers | partially_verified | Provider-neutral credential handles validate names and resolve environment-backed values only at execution time in `engine/tests/test_credentials.py`; no provider secret or live SDK is configured here |
 | OpenAI-compatible/NIM provider contracts | partially_verified | Real HTTP health, model discovery, streaming, and explicit egress-approval contracts are covered by `engine/tests/test_providers.py` |
 | Science parity | not_verifiable_here | Baseline matrix created |
 | Windows package | not_verifiable_here | Tauri release build is blocked by the host application-control policy while executing a Rust build script: `os error 4551` |
