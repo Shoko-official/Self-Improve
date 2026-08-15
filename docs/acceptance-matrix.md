@@ -16,7 +16,7 @@
 | Reviewer | partially_verified | Evidence-gap findings for source, computed, and inference claims are covered by `engine/tests/test_reviewer.py`; no rerun claim is made |
 | Annotations | partially_verified | Exact artifact-version targets, selectors, batch consumption, and no-retarget behavior are covered by `engine/tests/test_annotations.py` |
 | Science remote compute | partially_verified | Local subprocess fixture and approval-gated remote plan contracts are covered by `engine/tests/test_compute.py`; no live remote host is claimed |
-| Science cloud storage | partially_verified | Scoped S3/S3-compatible/GCS/Azure profile contracts, manifests, checksums, and write/delete approval gates are covered by `engine/tests/test_storage.py`; no live transfer is claimed |
+| Science cloud storage | partially_verified | Scoped S3/S3-compatible/GCS/Azure profiles, approved presigned import/export/delete, bounded prefix-scoped listing, manifests, and checksums are covered by `engine/tests/test_storage.py`, `engine/tests/test_presigned_storage.py`, and `engine/tests/test_presigned_listing.py`; provider SDK auth remains unclaimed |
 | Local data transfer | partially_verified | `frontierctl` ZIP export/import writes a SHA-256 manifest, requires an explicit empty import target, and rejects traversal paths in `engine/tests/test_cli.py` |
 | MCP | partially_verified | Stdio JSON-RPC initialize, typed tool discovery, structured read-only result, and unknown-tool rejection are covered by `engine/tests/test_mcp_server.py` |
 | Agent | partially_verified | Project-scoped plans, todo transitions, memory search, and deletion are covered by `engine/tests/test_agent_state.py` |
