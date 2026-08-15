@@ -5,5 +5,5 @@
   "identifier": "dev.shoko.frontier",
   "build": { "beforeDevCommand": "pnpm dev", "devUrl": "http://localhost:1420", "beforeBuildCommand": "pnpm build", "frontendDist": "../dist" },
   "app": { "windows": [{ "title": "Frontier", "width": 1280, "height": 820, "minWidth": 960, "minHeight": 640 }], "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost" } },
-  "bundle": { "active": true, "targets": "all" }
+  "bundle": { "active": true, "targets": "all", "resources": ["../runtime-packs"] }
 }
