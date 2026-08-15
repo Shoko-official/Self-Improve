@@ -83,6 +83,29 @@ class LoopbackTests(unittest.TestCase):
                 finally: state.close()
             finally: service.close()
 
+    def test_rpc_project_kernel_persists_namespace_and_restart_clears_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); store = FrontierStore(root); project_id = store.create_project("Kernel"); store.close()
+            service = LoopbackService(data_root=root); service.start()
+            try:
+                first = self._rpc(service, {"jsonrpc": "2.0", "id": 6, "method": "kernel.execute", "params": {"project_id": project_id, "code": "sample_size = 41"}})
+                second = self._rpc(service, {"jsonrpc": "2.0", "id": 7, "method": "kernel.execute", "params": {"project_id": project_id, "code": "print(sample_size + 1)"}})
+                self.assertEqual(first["result"]["state"], "succeeded")
+                self.assertEqual(second["result"]["stdout"], "42\n")
+                self.assertEqual(self._rpc(service, {"jsonrpc": "2.0", "id": 8, "method": "kernel.restart", "params": {"project_id": project_id}})["result"]["state"], "running")
+                cleared = self._rpc(service, {"jsonrpc": "2.0", "id": 9, "method": "kernel.execute", "params": {"project_id": project_id, "code": "print('sample_size' in globals())"}})
+                self.assertEqual(cleared["result"]["stdout"], "False\n")
+            finally: service.close()
+
+    def test_rpc_project_kernel_rejects_an_archived_project(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); store = FrontierStore(root); project_id = store.create_project("Archived"); store.archive_project(project_id); store.close()
+            service = LoopbackService(data_root=root); service.start()
+            try:
+                response = self._rpc(service, {"jsonrpc": "2.0", "id": 10, "method": "kernel.execute", "params": {"project_id": project_id, "code": "print('blocked')"}})
+                self.assertEqual(response["error"]["code"], -32602)
+            finally: service.close()
+
     def _rpc(self, service: LoopbackService, body: dict[str, object]) -> dict[str, object]:
         request = Request(f"{service.url}/rpc", data=json.dumps(body).encode(), headers={"Authorization": f"Bearer {service.token}", "Content-Type": "application/json"}, method="POST")
         return json.load(urlopen(request))

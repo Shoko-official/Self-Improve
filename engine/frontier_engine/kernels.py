@@ -40,7 +40,11 @@ class PythonKernel:
             if self._process is None or self._process.stdin is None or self._process.stdout is None: raise RuntimeError("FR-KERNEL-START: Python worker streams unavailable")
             request_id = str(uuid.uuid4())
             self._process.stdin.write(json.dumps({"id": request_id, "code": code}) + "\n"); self._process.stdin.flush()
-            response = json.loads(self._process.stdout.readline())
+            line = self._process.stdout.readline()
+            if not line:
+                self.interrupt()
+                raise RuntimeError("FR-KERNEL-TERMINATED")
+            response = json.loads(line)
             return KernelResult(response["id"], response["state"], response["stdout"], response["stderr"], response.get("error"))
 
     def interrupt(self) -> None:

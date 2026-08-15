@@ -12,6 +12,7 @@ from typing import Any
 from frontier_engine.__main__ import doctor
 from frontier_engine.agent_runner import run_local_agent
 from frontier_engine.agent_state import AgentStateStore
+from frontier_engine.kernels import PythonKernel
 from frontier_engine.runtime_install import install_ollama_model
 from frontier_engine.runtimes import probe_ollama
 from frontier_engine.store import FrontierStore
@@ -21,6 +22,8 @@ class LoopbackService:
     def __init__(self, port: int = 0, data_root: Path | None = None) -> None:
         self.token = secrets.token_urlsafe(32)
         self.data_root = data_root
+        self._kernels: dict[str, PythonKernel] = {}
+        self._kernel_lock = threading.Lock()
         self._server = ThreadingHTTPServer(("127.0.0.1", port), self._handler())
         self._thread: threading.Thread | None = None
 
@@ -36,6 +39,9 @@ class LoopbackService:
     def close(self) -> None:
         self._server.shutdown()
         self._server.server_close()
+        with self._kernel_lock:
+            for kernel in self._kernels.values(): kernel.close()
+            self._kernels.clear()
         if self._thread is not None:
             self._thread.join(timeout=2)
             self._thread = None
@@ -66,6 +72,20 @@ class LoopbackService:
             store = FrontierStore(self.data_root)
             try: return store.retry_job(_required_string(params, "job_id"))
             finally: store.close()
+        if method == "kernel.execute":
+            project_id = _required_string(params, "project_id")
+            self._require_active_project(project_id)
+            result = self._kernel(project_id).execute(_required_string(params, "code"))
+            return {"project_id": project_id, **result.__dict__}
+        if method == "kernel.restart":
+            project_id = _required_string(params, "project_id")
+            self._require_active_project(project_id)
+            kernel = self._kernel(project_id); kernel.restart()
+            return {"project_id": project_id, "state": kernel.state}
+        if method == "kernel.status":
+            project_id = _required_string(params, "project_id")
+            self._require_active_project(project_id)
+            return {"project_id": project_id, "state": self._kernels[project_id].state if project_id in self._kernels else "stopped"}
         if method == "agent.run":
             store = FrontierStore(self.data_root)
             try: store.require_active_project(_required_string(params, "project_id"))
@@ -74,6 +94,16 @@ class LoopbackService:
             try: return run_local_agent(state, _required_string(params, "project_id"), _required_string(params, "model"), _required_string(params, "prompt"))
             finally: state.close()
         raise RuntimeError("FR-RPC-METHOD-NOT-FOUND")
+
+    def _require_active_project(self, project_id: str) -> None:
+        if self.data_root is None: raise RuntimeError("FR-RPC-DATA-ROOT-MISSING")
+        store = FrontierStore(self.data_root)
+        try: store.require_active_project(project_id)
+        finally: store.close()
+
+    def _kernel(self, project_id: str) -> PythonKernel:
+        with self._kernel_lock:
+            return self._kernels.setdefault(project_id, PythonKernel())
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
         token = self.token; service = self
