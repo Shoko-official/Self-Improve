@@ -4,7 +4,7 @@ import json
 from unittest.mock import patch
 from pathlib import Path
 
-from frontier_engine.environments import EnvironmentManifest, create_python_environment, install_python_packages, list_manifests, probe_environment, save_manifest
+from frontier_engine.environments import EnvironmentManifest, create_python_environment, create_r_environment, install_python_packages, install_r_packages, list_manifests, probe_environment, save_manifest
 
 
 class EnvironmentTests(unittest.TestCase):
@@ -43,3 +43,19 @@ class EnvironmentTests(unittest.TestCase):
             self.assertEqual(updated["packages"], {"numpy": "2.0"})
             self.assertNotEqual(updated["package_fingerprint"], "empty")
             with self.assertRaises(ValueError): install_python_packages(root, "analysis", ["--index-url", "https://example.invalid"])
+
+    def test_r_environment_is_truthful_when_runtime_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("frontier_engine.environments.shutil.which", return_value=None):
+                with self.assertRaisesRegex(RuntimeError, "FR-ENV-R-NOT-FOUND"): create_r_environment(Path(directory), "analysis")
+
+    def test_installs_r_packages_and_updates_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); library = root / "r-library"; library.mkdir()
+            save_manifest(root, EnvironmentManifest("analysis", "r", {}, path=str(library), executable="Rscript", runtime_version="R 4.4", package_fingerprint="empty"))
+            result = type("Result", (), {"returncode": 0, "stdout": "Package\tVersion\nrjson\t1.0\n", "stderr": ""})()
+            with patch("frontier_engine.environments.subprocess.run", return_value=result) as run:
+                updated = install_r_packages(root, "analysis", ["rjson"])
+            self.assertEqual(updated["packages"], {"rjson": "1.0"})
+            self.assertEqual(run.call_args.kwargs["env"]["R_LIBS_USER"], str(library))
+            with self.assertRaises(ValueError): install_r_packages(root, "analysis", ["rjson"], "http://insecure.invalid")
