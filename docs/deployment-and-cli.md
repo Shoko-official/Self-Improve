@@ -6,4 +6,6 @@ During development, run `python -m frontier_engine.cli doctor --json` for the ho
 
 `python -m frontier_engine.cli export --output C:\\path\\frontier.zip --json` writes a new ZIP snapshot of that local data root, including a SHA-256 manifest. It refuses to overwrite an archive or write inside the source root. `python -m frontier_engine.cli import --input C:\\path\\frontier.zip --destination C:\\path\\restored-data --json` requires a new or empty destination, verifies the manifest, and rejects traversal paths before writing data.
 
+Before enabling a packaged engine, verify its supplied manifest with `frontierctl verify-runtime-bundle --manifest PATH --bundle-root PATH`. The command returns `valid: true` only for the exact target platform, executable path, and SHA-256 recorded by the bundle publisher.
+
 Daemon lifecycle, update verification, and remote tunnel support are not implemented yet. `serve --duration-seconds N` exists for controlled tests and demonstrations; the default service runs until interrupted.

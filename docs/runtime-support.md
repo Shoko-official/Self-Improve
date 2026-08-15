@@ -8,4 +8,6 @@ The initial Ollama manifest is a local text and embedding adapter contract. Its 
 
 The desktop Models surface exposes this same operation through development-only IPC. It requires a project ID and exact model identifier, then renders the returned job events and diagnostic. Packaged builds continue to reject development-engine IPC until Frontier bundles a managed engine runtime.
 
+Managed bundles use a JSON manifest with runtime/version, protocol version, target platform and architecture, executable-relative path, and SHA-256. `frontierctl verify-runtime-bundle --manifest PATH --bundle-root PATH` checks platform, path containment, file presence, and exact bytes. A missing or mismatched bundle is reported with a stable `FR-BUNDLE-*` diagnostic; verification never falls back to a host runtime.
+
 The model registry can search the public Hugging Face model index and download one explicitly selected repository file. Transfers write to a temporary path, verify a supplied SHA-256 when available, then register the completed file. Downloading never changes `capability_state` from `unvalidated`.

@@ -34,6 +34,7 @@ from frontier_engine.compute import ComputePlan, run_remote
 from frontier_engine.workspace_tools import ProjectWorkspaceTools
 from frontier_engine.reviewer import Claim, review_claims
 from frontier_engine.renderers import render_preview
+from frontier_engine.managed_runtime import verify_bundle
 
 
 _BACKGROUND_PROCESSES: dict[int, subprocess.Popen[bytes]] = {}
@@ -576,7 +577,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "remote-compute", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -636,6 +637,8 @@ def main() -> None:
     parser.add_argument("--annotation-id", action="append")
     parser.add_argument("--media-type")
     parser.add_argument("--content", default="")
+    parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--bundle-root", type=Path)
     parser.add_argument("--query")
     parser.add_argument("--source")
     parser.add_argument("--result-count", type=int)
@@ -728,6 +731,10 @@ def main() -> None:
             parser.error("remote-compute requires --compute-target, --compute-endpoint, and one or more --compute-command")
         plan = ComputePlan(args.compute_target, tuple(args.compute_command), args.compute_cpu, args.compute_memory_mb, args.compute_timeout, args.compute_cost, args.compute_egress, args.compute_endpoint, args.compute_working_directory)
         result = run_remote(plan, args.compute_approved)
+    elif args.command == "verify-runtime-bundle":
+        if args.manifest is None or args.bundle_root is None:
+            parser.error("verify-runtime-bundle requires --manifest and --bundle-root")
+        result = verify_bundle(args.manifest, args.bundle_root)
     elif args.command == "projects":
         result = create_project(root, args.name, args.instructions or "") if args.name is not None else projects(root)
     elif args.command == "set-project-instructions":
