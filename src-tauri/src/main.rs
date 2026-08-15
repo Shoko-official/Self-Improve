@@ -61,6 +61,21 @@ fn archive_workspace_project_development(project_id: String) -> Result<serde_jso
     run_development_engine(&["archive-project".to_owned(), "--project-id".to_owned(), project_id])
 }
 
+#[tauri::command]
+fn compute_jobs_development() -> Result<serde_json::Value, String> {
+    run_development_engine(&["jobs".to_owned()])
+}
+
+#[tauri::command]
+fn enqueue_compute_job_development(project_id: String, operation: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["jobs".to_owned(), "--project-id".to_owned(), project_id, "--operation".to_owned(), operation])
+}
+
+#[tauri::command]
+fn cancel_compute_job_development(job_id: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["cancel-job".to_owned(), "--job-id".to_owned(), job_id])
+}
+
 fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, String> {
     if !cfg!(debug_assertions) {
         return Err(
@@ -101,7 +116,7 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_session_starred_development, archive_workspace_project_development])
+        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_session_starred_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
 }

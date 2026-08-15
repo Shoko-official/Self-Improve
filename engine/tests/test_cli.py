@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, create_project, create_session, data_root, export_data, import_data, projects, sessions, set_session_starred, status
+from frontier_engine.cli import archive_project, cancel_job, create_project, create_session, data_root, enqueue_job, export_data, import_data, jobs, projects, sessions, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -73,3 +73,11 @@ class CliTests(unittest.TestCase):
             archive_project(root, project_id)
             with self.assertRaisesRegex(Exception, "archived"):
                 create_session(root, project_id, "Blocked")
+
+    def test_jobs_can_be_enqueued_listed_and_cancelled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project_id = create_project(root, "Jobs")['id']
+            job = enqueue_job(root, project_id, "rag.ingest")
+            self.assertEqual(jobs(root)["jobs"][0]["state"], "queued")
+            self.assertEqual(cancel_job(root, job["id"])["state"], "cancelled")
