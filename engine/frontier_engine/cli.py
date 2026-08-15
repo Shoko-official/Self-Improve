@@ -19,6 +19,7 @@ from frontier_engine.__main__ import doctor
 from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
+from frontier_engine.model_registry import HuggingFaceHub, ModelRegistry
 from frontier_engine.environments import list_manifests, probe_environment
 from frontier_engine.generation import run_generation
 from frontier_engine.runtimes import stream_ollama
@@ -286,6 +287,18 @@ def generate_local(root: Path, project_id: str, runtime: str, model: str, prompt
         store.close()
 
 
+def search_huggingface_models(query: str, limit: int = 10) -> dict[str, object]:
+    return {"query": query, "models": HuggingFaceHub().search_models(query, limit)}
+
+
+def download_huggingface_model(root: Path, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None) -> dict[str, object]:
+    registry = ModelRegistry(root / "models.sqlite3")
+    try:
+        return registry.download_and_register(HuggingFaceHub(), repository_id, filename, destination, revision, expected_sha256)
+    finally:
+        registry.close()
+
+
 def artifacts(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -427,7 +440,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "generations", "generate-local", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "generations", "generate-local", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -448,6 +461,11 @@ def main() -> None:
     parser.add_argument("--generation-id")
     parser.add_argument("--runtime")
     parser.add_argument("--model")
+    parser.add_argument("--repository-id")
+    parser.add_argument("--filename")
+    parser.add_argument("--revision", default="main")
+    parser.add_argument("--expected-sha256")
+    parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--prompt")
     parser.add_argument("--artifact-id")
     parser.add_argument("--media-type")
@@ -564,6 +582,14 @@ def main() -> None:
         if args.project_id is None or args.runtime is None or args.model is None or args.prompt is None:
             parser.error("generate-local requires --project-id, --runtime, --model, and --prompt")
         result = generate_local(root, args.project_id, args.runtime, args.model, args.prompt, args.session_id)
+    elif args.command == "model-search":
+        if args.query is None:
+            parser.error("model-search requires --query")
+        result = search_huggingface_models(args.query, args.limit)
+    elif args.command == "model-download":
+        if args.repository_id is None or args.filename is None or args.destination is None:
+            parser.error("model-download requires --repository-id, --filename, and --destination")
+        result = download_huggingface_model(root, args.repository_id, args.filename, args.destination, args.revision, args.expected_sha256)
     elif args.command == "artifacts":
         if args.project_id is None:
             parser.error("artifacts requires --project-id")

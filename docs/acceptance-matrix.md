@@ -7,6 +7,7 @@
 | Local control plane | partially_verified | `frontierctl serve` starts an authenticated ephemeral-bearer status endpoint bound to `127.0.0.1`; background start, URL/status/log inspection, and bounded stop are covered by `engine/tests/test_cli.py`; tunnels and updates remain unimplemented |
 | Hardware probe | partially_verified | Static OS, architecture, and core probe implemented |
 | Local text runtime | not_verifiable_here | No runtime pack installed |
+| Hugging Face model registry | partially_verified | Explicit public-index search and selected-file download use bounded queries, atomic writes, SHA-256 verification, and post-transfer local registration in `engine/tests/test_model_registry.py`; a downloaded file remains runtime-unvalidated |
 | Runtime packs | partially_verified | Versioned manifest validation, operation checks, and truthful local Ollama availability probes are covered by `engine/tests/test_runtimes.py` |
 | Permissions | partially_verified | Exact resource/operation grants, one-time consumption, and revocation enforcement are covered by `engine/tests/test_permissions.py` |
 | Python/R kernels | partially_verified | Persistent Python namespace, restart clearing, failed execution records, and honest R capability probing are covered by `engine/tests/test_kernels.py` |
