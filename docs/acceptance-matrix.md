@@ -25,7 +25,7 @@
 | OpenAI-compatible/NIM provider contracts | partially_verified | Real HTTP health, model discovery, streaming, and explicit egress-approval contracts are covered by `engine/tests/test_providers.py` |
 | Science parity | not_verifiable_here | Baseline matrix created |
 | Windows package | not_verifiable_here | Tauri release build is blocked by the host application-control policy while executing a Rust build script: `os error 4551` |
-| Science projects | partially_verified | SQLite project/session lifecycle, intra-project forks, session state, and archive write protection are covered by `engine/tests/test_store.py`; the desktop workspaces view lists and creates project records through debug-only IPC |
+| Science projects | partially_verified | SQLite project/session lifecycle, instructions, constrained compact/standard/extended reasoning effort, literal session search, intra-project forks, session state, and archive write protection are covered by `engine/tests/test_store.py`; the desktop Workspaces view exposes these records through debug-only IPC |
 | Scientific artifacts | partially_verified | Append-only versions, SHA-256 content storage, and independent provenance fields are covered by `engine/tests/test_store.py` |
 | Jobs | partially_verified | Durable queue, claim, success/failure, and cooperative cancellation state transitions are covered by `engine/tests/test_store.py` |
 | RAG | partially_verified | Durable ingestion, exact citations, lexical and injected-embedder hybrid contracts, and held-out source recall are covered by `engine/tests/test_rag.py` |

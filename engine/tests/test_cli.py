@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, import_data, jobs, projects, sessions, set_claim_status, set_session_starred, status
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, import_data, jobs, projects, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -76,6 +76,16 @@ class CliTests(unittest.TestCase):
             archive_project(root, project_id)
             with self.assertRaisesRegex(Exception, "archived"):
                 create_session(root, project_id, "Blocked")
+
+    def test_projects_and_sessions_support_configuration_and_search(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(root, "Discovery", "Initial scope")
+            session = create_session(root, project["id"], "Review notebooks", reasoning_effort="extended")
+            set_project_instructions(root, project["id"], "Keep raw records.")
+            set_session_reasoning_effort(root, session["id"], "compact")
+            found = search_sessions(root, "notebooks", project["id"])["sessions"]
+            self.assertEqual(found[0]["reasoning_effort"], "compact")
 
     def test_jobs_can_be_enqueued_listed_and_cancelled(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

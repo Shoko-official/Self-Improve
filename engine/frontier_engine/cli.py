@@ -139,16 +139,23 @@ def projects(root: Path) -> dict[str, object]:
     return {"projects": records}
 
 
-def create_project(root: Path, name: str) -> dict[str, object]:
+def create_project(root: Path, name: str, instructions: str = "") -> dict[str, object]:
     name = name.strip()
     if not name:
         raise ValueError("Project name is required.")
     store = FrontierStore(root)
     try:
-        project_id = store.create_project(name)
+        project_id = store.create_project(name, instructions)
     finally:
         store.close()
-    return {"id": project_id, "name": name}
+    return {"id": project_id, "name": name, "instructions": instructions}
+
+
+def set_project_instructions(root: Path, project_id: str, instructions: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: store.set_project_instructions(project_id, instructions)
+    finally: store.close()
+    return {"id": project_id, "instructions": instructions}
 
 
 def sessions(root: Path, project_id: str) -> dict[str, object]:
@@ -160,16 +167,16 @@ def sessions(root: Path, project_id: str) -> dict[str, object]:
     return {"project_id": project_id, "sessions": records}
 
 
-def create_session(root: Path, project_id: str, title: str, parent_session_id: str | None = None) -> dict[str, object]:
+def create_session(root: Path, project_id: str, title: str, parent_session_id: str | None = None, reasoning_effort: str = "standard") -> dict[str, object]:
     title = title.strip()
     if not title:
         raise ValueError("Session title is required.")
     store = FrontierStore(root)
     try:
-        session_id = store.create_session(project_id, title, parent_session_id=parent_session_id)
+        session_id = store.create_session(project_id, title, reasoning_effort, parent_session_id)
     finally:
         store.close()
-    return {"id": session_id, "project_id": project_id, "title": title, "parent_session_id": parent_session_id}
+    return {"id": session_id, "project_id": project_id, "title": title, "reasoning_effort": reasoning_effort, "parent_session_id": parent_session_id}
 
 
 def set_session_starred(root: Path, session_id: str, starred: bool) -> dict[str, object]:
@@ -179,6 +186,20 @@ def set_session_starred(root: Path, session_id: str, starred: bool) -> dict[str,
     finally:
         store.close()
     return {"id": session_id, "starred": starred}
+
+
+def set_session_reasoning_effort(root: Path, session_id: str, reasoning_effort: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: store.set_session_reasoning_effort(session_id, reasoning_effort)
+    finally: store.close()
+    return {"id": session_id, "reasoning_effort": reasoning_effort}
+
+
+def search_sessions(root: Path, query: str, project_id: str | None = None) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: records = store.search_sessions(query, project_id)
+    finally: store.close()
+    return {"query": query, "project_id": project_id, "sessions": records}
 
 
 def archive_project(root: Path, project_id: str) -> dict[str, object]:
@@ -351,7 +372,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -361,6 +382,8 @@ def main() -> None:
     parser.add_argument("--session-id")
     parser.add_argument("--title")
     parser.add_argument("--parent-session-id")
+    parser.add_argument("--instructions")
+    parser.add_argument("--reasoning-effort", choices=("compact", "standard", "extended"), default="standard")
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
     parser.add_argument("--job-id")
@@ -427,15 +450,27 @@ def main() -> None:
     elif args.command == "environments":
         result = {"manifests": list_manifests(root), "probe": probe_environment(args.language or "python")}
     elif args.command == "projects":
-        result = create_project(root, args.name) if args.name is not None else projects(root)
+        result = create_project(root, args.name, args.instructions or "") if args.name is not None else projects(root)
+    elif args.command == "set-project-instructions":
+        if args.project_id is None or args.instructions is None:
+            parser.error("set-project-instructions requires --project-id and --instructions")
+        result = set_project_instructions(root, args.project_id, args.instructions)
     elif args.command == "sessions":
         if args.project_id is None:
             parser.error("sessions requires --project-id")
-        result = create_session(root, args.project_id, args.title, args.parent_session_id) if args.title is not None else sessions(root, args.project_id)
+        result = create_session(root, args.project_id, args.title, args.parent_session_id, args.reasoning_effort) if args.title is not None else sessions(root, args.project_id)
     elif args.command == "star-session":
         if args.session_id is None or args.starred is None:
             parser.error("star-session requires --session-id and --starred true|false")
         result = set_session_starred(root, args.session_id, args.starred == "true")
+    elif args.command == "set-session-reasoning":
+        if args.session_id is None:
+            parser.error("set-session-reasoning requires --session-id")
+        result = set_session_reasoning_effort(root, args.session_id, args.reasoning_effort)
+    elif args.command == "search-sessions":
+        if args.query is None:
+            parser.error("search-sessions requires --query")
+        result = search_sessions(root, args.query, args.project_id)
     elif args.command == "archive-project":
         if args.project_id is None:
             parser.error("archive-project requires --project-id")

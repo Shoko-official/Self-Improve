@@ -15,6 +15,9 @@ class ArchivedProjectError(ValueError):
     """Raised when a write would change an archived project."""
 
 
+_REASONING_EFFORTS = {"compact", "standard", "extended"}
+
+
 def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
@@ -112,6 +115,15 @@ class FrontierStore:
             raise KeyError(f"Active project not found: {project_id}")
         self.connection.commit()
 
+    def set_project_instructions(self, project_id: str, instructions: str) -> None:
+        result = self.connection.execute(
+            "UPDATE projects SET instructions = ? WHERE id = ? AND archived_at IS NULL",
+            (instructions, project_id),
+        )
+        if result.rowcount != 1:
+            raise ArchivedProjectError(f"Active project not found: {project_id}")
+        self.connection.commit()
+
     def create_session(
         self,
         project_id: str,
@@ -120,6 +132,7 @@ class FrontierStore:
         parent_session_id: str | None = None,
     ) -> str:
         self._require_active_project(project_id)
+        self._require_reasoning_effort(reasoning_effort)
         if parent_session_id is not None:
             parent = self.connection.execute(
                 "SELECT project_id FROM sessions WHERE id = ?", (parent_session_id,)
@@ -142,6 +155,32 @@ class FrontierStore:
         if result.rowcount != 1:
             raise KeyError(f"Session not found: {session_id}")
         self.connection.commit()
+
+    def set_session_reasoning_effort(self, session_id: str, reasoning_effort: str) -> None:
+        self._require_reasoning_effort(reasoning_effort)
+        result = self.connection.execute(
+            "UPDATE sessions SET reasoning_effort = ? WHERE id = ?", (reasoning_effort, session_id)
+        )
+        if result.rowcount != 1:
+            raise KeyError(f"Session not found: {session_id}")
+        self.connection.commit()
+
+    def search_sessions(self, query: str, project_id: str | None = None) -> list[dict[str, object]]:
+        query = query.strip()
+        if not query:
+            raise ValueError("Session search query is required.")
+        conditions = ["instr(lower(s.title), lower(?)) > 0"]
+        parameters: list[object] = [query]
+        if project_id is not None:
+            conditions.append("s.project_id = ?")
+            parameters.append(project_id)
+        rows = self.connection.execute(
+            f"""SELECT s.id, s.project_id, p.name AS project_name, s.title, s.parent_session_id, s.reasoning_effort, s.starred, s.created_at
+                FROM sessions s JOIN projects p ON p.id = s.project_id WHERE {' AND '.join(conditions)}
+                ORDER BY s.created_at DESC, s.id DESC""",
+            parameters,
+        )
+        return [dict(row) for row in rows]
 
     def create_artifact(
         self, project_id: str, name: str, media_type: str, session_id: str | None = None
@@ -319,6 +358,10 @@ class FrontierStore:
         ).fetchone()
         if session is None or session["project_id"] != project_id:
             raise ValueError("A job session must belong to its project.")
+
+    def _require_reasoning_effort(self, reasoning_effort: str) -> None:
+        if reasoning_effort not in _REASONING_EFFORTS:
+            raise ValueError("Unsupported session reasoning effort.")
 
     def _require_active_project(self, project_id: str) -> None:
         row = self.connection.execute(
