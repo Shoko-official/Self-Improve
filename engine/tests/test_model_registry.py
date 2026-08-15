@@ -55,3 +55,11 @@ class ModelRegistryTests(unittest.TestCase):
             with self.assertRaisesRegex(HuggingFaceHubError, "SHA256"):
                 self.hub.download_file("org/model", "model.gguf", destination, expected_sha256="0" * 64)
             self.assertFalse(destination.exists())
+
+    def test_hub_cancellation_removes_the_incomplete_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "model.gguf"
+            checks = iter((False, True))
+            with self.assertRaisesRegex(HuggingFaceHubError, "CANCELLED"):
+                self.hub.download_file("org/model", "model.gguf", destination, cancel_requested=lambda: next(checks))
+            self.assertFalse(destination.exists())

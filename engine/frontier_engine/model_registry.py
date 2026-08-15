@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 
@@ -36,7 +37,7 @@ class HuggingFaceHub:
             raise HuggingFaceHubError("FR-HF-SEARCH: Hub returned a non-list response")
         return [{key: item.get(key) for key in ("modelId", "sha", "lastModified", "downloads", "likes", "library_name", "tags")} for item in payload if isinstance(item, dict) and isinstance(item.get("modelId"), str)]
 
-    def download_file(self, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None) -> dict[str, object]:
+    def download_file(self, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None, cancel_requested: Callable[[], bool] | None = None) -> dict[str, object]:
         if not _valid_repository_id(repository_id) or not _valid_revision(revision) or not _valid_filename(filename):
             raise ValueError("Invalid Hugging Face repository, revision, or filename.")
         destination = destination.resolve()
@@ -47,7 +48,12 @@ class HuggingFaceHub:
         url = f"{self.base_url}/{urllib.parse.quote(repository_id, safe='/')}/resolve/{urllib.parse.quote(revision, safe='')}/{urllib.parse.quote(filename, safe='/')}"
         try:
             with urllib.request.urlopen(url, timeout=self.timeout_seconds) as response, temporary.open("wb") as target:
-                while chunk := response.read(1024 * 1024):
+                while True:
+                    if cancel_requested is not None and cancel_requested():
+                        raise HuggingFaceHubError("FR-HF-DOWNLOAD-CANCELLED")
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
                     target.write(chunk)
                     digest.update(chunk)
                     received += len(chunk)
@@ -105,6 +111,6 @@ class ModelRegistry:
     def list(self) -> list[dict[str, object]]:
         return [dict(row) for row in self.connection.execute("SELECT * FROM local_models ORDER BY path")]
 
-    def download_and_register(self, hub: HuggingFaceHub, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None) -> dict[str, object]:
-        transfer = hub.download_file(repository_id, filename, destination, revision, expected_sha256)
+    def download_and_register(self, hub: HuggingFaceHub, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None, cancel_requested: Callable[[], bool] | None = None) -> dict[str, object]:
+        transfer = hub.download_file(repository_id, filename, destination, revision, expected_sha256, cancel_requested)
         return {"transfer": transfer, "model": self.register(destination)}
