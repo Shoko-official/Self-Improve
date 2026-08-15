@@ -10,6 +10,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from frontier_engine.__main__ import doctor
+from frontier_engine.literature import LiteratureStore
 from frontier_engine.store import FrontierStore
 
 
@@ -145,6 +146,19 @@ def artifact_versions(root: Path, artifact_id: str) -> dict[str, object]:
     return {"artifact_id": artifact_id, "versions": versions}
 
 
+def literature_queries(root: Path) -> dict[str, object]:
+    store = LiteratureStore(root / "literature.sqlite3")
+    try: return {"queries": store.queries()}
+    finally: store.close()
+
+
+def record_literature_query(root: Path, query: str, source: str, result_count: int) -> dict[str, object]:
+    store = LiteratureStore(root / "literature.sqlite3")
+    try: query_id = store.record_query(query, source, "{}", result_count)
+    finally: store.close()
+    return {"id": query_id, "query": query, "source": source, "result_count": result_count}
+
+
 def export_data(root: Path, output: Path) -> dict[str, object]:
     root = root.resolve()
     output = output.resolve()
@@ -215,7 +229,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -231,6 +245,9 @@ def main() -> None:
     parser.add_argument("--artifact-id")
     parser.add_argument("--media-type")
     parser.add_argument("--content", default="")
+    parser.add_argument("--query")
+    parser.add_argument("--source")
+    parser.add_argument("--result-count", type=int)
     args = parser.parse_args()
     root = data_root()
     if args.command == "doctor":
@@ -270,6 +287,13 @@ def main() -> None:
         if args.artifact_id is None:
             parser.error("artifact-versions requires --artifact-id")
         result = artifact_versions(root, args.artifact_id)
+    elif args.command == "literature":
+        if args.query is None:
+            result = literature_queries(root)
+        elif args.source is None or args.result_count is None:
+            parser.error("literature query requires --source and --result-count")
+        else:
+            result = record_literature_query(root, args.query, args.source, args.result_count)
     elif args.command == "export":
         if args.output is None:
             parser.error("export requires --output PATH")
