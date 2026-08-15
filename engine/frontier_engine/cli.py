@@ -22,7 +22,7 @@ from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
 from frontier_engine.model_registry import HuggingFaceHub, ModelRegistry
-from frontier_engine.environments import list_manifests, probe_environment
+from frontier_engine.environments import create_python_environment, list_manifests, probe_environment
 from frontier_engine.generation import run_generation
 from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
 from frontier_engine.runtimes import stream_ollama
@@ -517,7 +517,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "create-environment", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -613,6 +613,10 @@ def main() -> None:
         result = stop_background_service(root)
     elif args.command == "environments":
         result = {"manifests": list_manifests(root), "probe": probe_environment(args.language or "python")}
+    elif args.command == "create-environment":
+        if args.name is None:
+            parser.error("create-environment requires --name")
+        result = create_python_environment(root, args.name)
     elif args.command == "projects":
         result = create_project(root, args.name, args.instructions or "") if args.name is not None else projects(root)
     elif args.command == "set-project-instructions":
