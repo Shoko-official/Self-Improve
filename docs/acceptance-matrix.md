@@ -28,4 +28,5 @@
 | Scientific artifacts | partially_verified | Append-only versions, SHA-256 content storage, and independent provenance fields are covered by `engine/tests/test_store.py` |
 | Jobs | partially_verified | Durable queue, claim, success/failure, and cooperative cancellation state transitions are covered by `engine/tests/test_store.py` |
 | RAG | partially_verified | Durable ingestion, exact citations, lexical and injected-embedder hybrid contracts, and held-out source recall are covered by `engine/tests/test_rag.py` |
+| Scientific claims | partially_verified | Typed claims preserve uncertainty, lifecycle status, and exact evidence URI/selector links in `engine/tests/test_claims.py` |
 | Prompt compiler | partially_verified | Compact, standard, and extended variants have explicit budget checks in `engine/tests/test_prompts.py` |
