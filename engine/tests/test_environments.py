@@ -58,4 +58,10 @@ class EnvironmentTests(unittest.TestCase):
                 updated = install_r_packages(root, "analysis", ["rjson"])
             self.assertEqual(updated["packages"], {"rjson": "1.0"})
             self.assertEqual(run.call_args.kwargs["env"]["R_LIBS_USER"], str(library))
+            self.assertIn("install.packages", run.call_args.args[0][-1])
+            with patch("frontier_engine.environments.subprocess.run", return_value=result) as bioc_run:
+                install_r_packages(root, "analysis", ["GenomicRanges"], channel="bioconductor")
+            self.assertIn("BiocManager::install", bioc_run.call_args.args[0][-1])
+            self.assertIn("ask=FALSE", bioc_run.call_args.args[0][-1])
             with self.assertRaises(ValueError): install_r_packages(root, "analysis", ["rjson"], "http://insecure.invalid")
+            with self.assertRaises(ValueError): install_r_packages(root, "analysis", ["rjson"], channel="unknown")

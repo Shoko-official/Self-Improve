@@ -96,15 +96,21 @@ def create_r_environment(root: Path, name: str) -> dict[str, object]:
     return asdict(manifest)
 
 
-def install_r_packages(root: Path, name: str, packages: list[str], repository: str = "https://cloud.r-project.org") -> dict[str, object]:
+def install_r_packages(root: Path, name: str, packages: list[str], repository: str = "https://cloud.r-project.org", channel: str = "cran") -> dict[str, object]:
     if not packages or any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9._-]*", package) for package in packages): raise ValueError("R package names must be simple package identifiers.")
+    if channel not in {"cran", "bioconductor"}: raise ValueError("R package channel must be cran or bioconductor.")
     if not repository.startswith("https://"): raise ValueError("R package repositories must use HTTPS.")
     manifest_path = root / "environments" / f"{name}.json"
     if not manifest_path.exists(): raise FileNotFoundError(f"Environment manifest not found: {name}")
     manifest = EnvironmentManifest(**json.loads(manifest_path.read_text(encoding="utf-8")))
     if manifest.language != "r" or not manifest.executable or not manifest.path: raise ValueError("Only R environments with a library can install packages.")
     package_vector = ",".join(json.dumps(package) for package in packages)
-    expression = f"install.packages(c({package_vector}), repos={json.dumps(repository)}); x <- installed.packages(lib.loc={json.dumps(manifest.path)})[,c('Package','Version'),drop=FALSE]; write.table(x, sep='\\t', row.names=FALSE, quote=FALSE)"
+    if channel == "cran":
+        expression = f"install.packages(c({package_vector}), repos={json.dumps(repository)}, lib={json.dumps(manifest.path)});"
+    else:
+        bioc_repository = repository if repository != "https://cloud.r-project.org" else "https://bioconductor.org/packages/release/bioc"
+        expression = f"if (!requireNamespace('BiocManager', quietly=TRUE)) install.packages('BiocManager', repos='https://cloud.r-project.org', lib={json.dumps(manifest.path)}); BiocManager::install(c({package_vector}), lib={json.dumps(manifest.path)}, ask=FALSE, update=FALSE, site_repository={json.dumps(bioc_repository)});"
+    expression += f" x <- installed.packages(lib.loc={json.dumps(manifest.path)})[,c('Package','Version'),drop=FALSE]; write.table(x, sep='\\t', row.names=FALSE, quote=FALSE)"
     env = os.environ.copy(); env["R_LIBS_USER"] = manifest.path
     try:
         installed = subprocess.run([manifest.executable, "--vanilla", "-e", expression], capture_output=True, text=True, env=env)
