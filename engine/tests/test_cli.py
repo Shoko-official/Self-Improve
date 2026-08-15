@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, create_artifact, create_project, create_session, data_root, enqueue_job, export_data, import_data, jobs, projects, sessions, set_session_starred, status
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, import_data, jobs, projects, sessions, set_claim_status, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -89,3 +89,12 @@ class CliTests(unittest.TestCase):
             artifact = create_artifact(root, project_id, "result.md", "text/markdown", "# Result")
             self.assertEqual(artifacts(root, project_id)["artifacts"][0]["name"], "result.md")
             self.assertEqual(artifact_versions(root, artifact["id"])["versions"][0]["execution_log"]["state"], "not_executed")
+
+    def test_claims_keep_evidence_and_support_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            claim = create_claim(root, "inference", "Candidate improved recall", "Fixture dataset only.", [("artifact://benchmark", "row:4")])
+            set_claim_status(root, claim["id"], "supported")
+            record = claims(root)["claims"][0]
+            self.assertEqual(record["status"], "supported")
+            self.assertEqual(record["evidence"][0]["evidence_uri"], "artifact://benchmark")

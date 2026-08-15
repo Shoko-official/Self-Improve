@@ -10,6 +10,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from frontier_engine.__main__ import doctor
+from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.environments import list_manifests, probe_environment
 from frontier_engine.store import FrontierStore
@@ -160,6 +161,26 @@ def record_literature_query(root: Path, query: str, source: str, result_count: i
     return {"id": query_id, "query": query, "source": source, "result_count": result_count}
 
 
+def claims(root: Path) -> dict[str, object]:
+    ledger = ClaimLedger(root / "claims.sqlite3")
+    try: return {"claims": ledger.list()}
+    finally: ledger.close()
+
+
+def create_claim(root: Path, claim_type: str, text: str, uncertainty: str, evidence: list[tuple[str, str]]) -> dict[str, object]:
+    ledger = ClaimLedger(root / "claims.sqlite3")
+    try: claim_id = ledger.create(claim_type, text, uncertainty, evidence)
+    finally: ledger.close()
+    return {"id": claim_id, "claim_type": claim_type, "text": text, "uncertainty": uncertainty, "evidence": evidence}
+
+
+def set_claim_status(root: Path, claim_id: str, status: str) -> dict[str, object]:
+    ledger = ClaimLedger(root / "claims.sqlite3")
+    try: ledger.set_status(claim_id, status)
+    finally: ledger.close()
+    return {"id": claim_id, "status": status}
+
+
 def export_data(root: Path, output: Path) -> dict[str, object]:
     root = root.resolve()
     output = output.resolve()
@@ -230,7 +251,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "environments", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "environments", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -249,6 +270,12 @@ def main() -> None:
     parser.add_argument("--query")
     parser.add_argument("--source")
     parser.add_argument("--result-count", type=int)
+    parser.add_argument("--claim-id")
+    parser.add_argument("--claim-type", choices=("source", "observation", "computed", "inference", "hypothesis"))
+    parser.add_argument("--claim-text")
+    parser.add_argument("--uncertainty")
+    parser.add_argument("--claim-status", choices=("draft", "supported", "disputed", "retracted"))
+    parser.add_argument("--evidence", action="append", nargs=2, metavar=("URI", "SELECTOR"))
     parser.add_argument("--language", choices=("python", "r"))
     args = parser.parse_args()
     root = data_root()
@@ -298,6 +325,17 @@ def main() -> None:
             parser.error("literature query requires --source and --result-count")
         else:
             result = record_literature_query(root, args.query, args.source, args.result_count)
+    elif args.command == "claims":
+        if args.claim_type is None and args.claim_text is None and args.uncertainty is None and args.evidence is None:
+            result = claims(root)
+        elif args.claim_type is None or args.claim_text is None or args.uncertainty is None:
+            parser.error("claims create requires --claim-type, --claim-text, and --uncertainty")
+        else:
+            result = create_claim(root, args.claim_type, args.claim_text, args.uncertainty, args.evidence or [])
+    elif args.command == "set-claim-status":
+        if args.claim_id is None or args.claim_status is None:
+            parser.error("set-claim-status requires --claim-id and --claim-status")
+        result = set_claim_status(root, args.claim_id, args.claim_status)
     elif args.command == "export":
         if args.output is None:
             parser.error("export requires --output PATH")
