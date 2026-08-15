@@ -102,6 +102,21 @@ fn record_literature_query_development(query: String, source: String, result_cou
 }
 
 #[tauri::command]
+fn scientific_claims_development() -> Result<serde_json::Value, String> {
+    run_development_engine(&["claims".to_owned()])
+}
+
+#[tauri::command]
+fn create_scientific_claim_development(claim_type: String, claim_text: String, uncertainty: String, evidence_uri: String, evidence_selector: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["claims".to_owned(), "--claim-type".to_owned(), claim_type, "--claim-text".to_owned(), claim_text, "--uncertainty".to_owned(), uncertainty, "--evidence".to_owned(), evidence_uri, evidence_selector])
+}
+
+#[tauri::command]
+fn set_scientific_claim_status_development(claim_id: String, claim_status: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["set-claim-status".to_owned(), "--claim-id".to_owned(), claim_id, "--claim-status".to_owned(), claim_status])
+}
+
+#[tauri::command]
 fn scientific_environment_probe_development(language: String) -> Result<serde_json::Value, String> {
     run_development_engine(&["environments".to_owned(), "--language".to_owned(), language])
 }
@@ -146,7 +161,7 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_session_starred_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, literature_queries_development, record_literature_query_development, scientific_environment_probe_development])
+        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_session_starred_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
 }
