@@ -108,6 +108,15 @@ class LoopbackTests(unittest.TestCase):
                 self.assertEqual(response["error"]["code"], -32602)
             finally: service.close()
 
+    def test_rpc_kernel_rejects_unknown_language_without_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); store = FrontierStore(root); project_id = store.create_project("Language"); store.close()
+            service = LoopbackService(data_root=root); service.start()
+            try:
+                response = self._rpc(service, {"jsonrpc": "2.0", "id": 12, "method": "kernel.execute", "params": {"project_id": project_id, "language": "ruby", "code": "puts 1"}})
+                self.assertEqual(response["error"]["code"], -32602)
+            finally: service.close()
+
     def test_rpc_project_kernel_persists_a_failed_execution_job(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); store = FrontierStore(root); project_id = store.create_project("Failure"); store.close()

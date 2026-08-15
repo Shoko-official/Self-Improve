@@ -1,8 +1,8 @@
 # Kernels and environments
 
-Frontier starts a persistent local Python worker using a line-delimited JSON protocol. Variables persist until restart; restart intentionally clears hidden state. Execution failures return their traceback as a failed result and are not converted to successful output.
+Frontier starts a persistent local Python or R worker using a line-delimited JSON protocol. Variables persist until restart; restart intentionally clears hidden state. Execution failures return their traceback as a failed result and are not converted to successful output.
 
-The authenticated loopback control plane exposes `kernel.execute`, `kernel.restart`, and `kernel.status` for active projects. It owns one Python worker per project while the service is running, so sequential calls for the same project share a namespace. Stopping the service stops every managed kernel. R remains capability-gated and is not substituted for Python.
+The authenticated loopback control plane exposes `kernel.execute`, `kernel.restart`, and `kernel.status` for active projects. Pass `language: "python"` or `language: "r"`; the default is Python. It owns one worker per project and language while the service is running, so sequential calls for the same project share a namespace. Stopping the service stops every managed kernel. An unavailable R runtime returns `FR-KERNEL-R-NOT-FOUND` and is never substituted with Python.
 
 `frontierctl create-environment --name analysis` creates a named local Python virtual environment under Frontier data without installing packages or contacting a package index. It records the exact interpreter, Python version, empty package fingerprint, location, and creation time. A duplicate or unsafe name is rejected before the environment is created. Package installation, R environments, and Jupyter integration remain separate work.
 
