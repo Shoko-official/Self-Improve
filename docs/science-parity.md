@@ -11,7 +11,7 @@ Public documentation baseline: Claude Science overview, product page, and 2026-0
 | Versioned scientific artifacts and provenance | not_verifiable_here | Planned foundation milestone |
 | Annotation and reviewer workflows | not_verifiable_here | Planned science-workbench milestone |
 | Local, SSH, cluster, and cloud compute | not_verifiable_here | Planned compute milestone |
-| Scientific renderers and connector packs | not_verifiable_here | Planned science-workbench milestone |
+| Scientific renderers and connector packs | partially_verified | Local bounded Markdown/HTML/table previews and typed MCP registry; domain renderers remain planned |
 
 This audit records public behavior only. It does not claim affiliation or compatibility with Anthropic or Claude Science.
 
