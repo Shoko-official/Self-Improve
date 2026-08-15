@@ -10,6 +10,7 @@
 | Permissions | partially_verified | Exact resource/operation grants, one-time consumption, and revocation enforcement are covered by `engine/tests/test_permissions.py` |
 | Python/R kernels | partially_verified | Persistent Python namespace, restart clearing, failed execution records, and honest R capability probing are covered by `engine/tests/test_kernels.py` |
 | Reviewer | partially_verified | Evidence-gap findings for source, computed, and inference claims are covered by `engine/tests/test_reviewer.py`; no rerun claim is made |
+| Annotations | partially_verified | Exact artifact-version targets, selectors, batch consumption, and no-retarget behavior are covered by `engine/tests/test_annotations.py` |
 | Remote providers | not_verifiable_here | No credential or provider configured |
 | OpenAI-compatible/NIM provider contracts | partially_verified | Real HTTP health, model discovery, streaming, and explicit egress-approval contracts are covered by `engine/tests/test_providers.py` |
 | Science parity | not_verifiable_here | Baseline matrix created |
