@@ -10,3 +10,38 @@ export type MessageKey = keyof typeof messages.en;
 export function translate(language: Language, key: MessageKey): string {
   return messages[language][key];
 }
+
+const surfaceMessages = {
+  en: {
+    evidenceReview: "Evidence review",
+    exactArtifactFeedback: "Exact artifact feedback",
+    persistentProjectWorkspace: "Persistent project workspace",
+    localAgent: "Local agent",
+    projectLedger: "Project ledger",
+    trustBoundary: "Trust boundary",
+    developmentEngine: "Development engine",
+    noActiveProject: "Create an active project first",
+    refresh: "Refresh",
+    save: "Save",
+    run: "Run",
+  },
+  fr: {
+    evidenceReview: "Revue des preuves",
+    exactArtifactFeedback: "Retour exact sur l’artefact",
+    persistentProjectWorkspace: "Espace de travail persistant",
+    localAgent: "Agent local",
+    projectLedger: "Registre des projets",
+    trustBoundary: "Frontière de confiance",
+    developmentEngine: "Moteur de développement",
+    noActiveProject: "Créez d’abord un projet actif",
+    refresh: "Actualiser",
+    save: "Enregistrer",
+    run: "Exécuter",
+  },
+} as const;
+
+export type SurfaceMessageKey = keyof typeof surfaceMessages.en;
+
+export function surfaceText(language: Language, key: SurfaceMessageKey): string {
+  return surfaceMessages[language][key];
+}
