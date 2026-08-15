@@ -2,7 +2,7 @@
 
 | Area | Status | Evidence |
 | --- | --- | --- |
-| Desktop launch | partially_verified | Tauri configuration, icon, and native capability command compile under the Visual Studio developer environment |
+| Desktop launch | verified | `pnpm tauri dev` compiled `target\\debug\\frontier.exe` through the Visual Studio developer environment and launched it on 2026-08-15 |
 | Engine protocol | verified | `python -m frontier_engine doctor` fixture |
 | Hardware probe | partially_verified | Static OS, architecture, and core probe implemented |
 | Local text runtime | not_verifiable_here | No runtime pack installed |

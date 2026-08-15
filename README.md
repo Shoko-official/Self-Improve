@@ -18,3 +18,5 @@ python -m frontier_engine.cli status --json
 ```
 
 The project does not yet include a model runtime pack, remote-provider credential, or scientific-kernel environment. These absent capabilities are deliberately reported as unavailable rather than emulated.
+
+The Windows debug desktop launch was verified on 2026-08-15 with `pnpm tauri dev`. Release packaging remains blocked on this host by application control while a Rust release build script executes.
