@@ -12,4 +12,6 @@ Managed bundles use a JSON manifest with runtime/version, protocol version, targ
 
 Tauri packages the `runtime-packs` manifest directory as a resource so a future signed runtime artifact can be discovered in the packaged app. The current repository contains contract metadata only; packaged builds still refuse engine IPC until a verified executable bundle is present.
 
+`download_runtime_artifact` is the acquisition boundary for a future distribution service. It requires a signed query URL, explicit approval, a required SHA-256, a bounded response, and an atomic destination write. It never executes the downloaded bytes; `verify_bundle` must pass before any runtime is considered usable.
+
 The model registry can search the public Hugging Face model index and download one explicitly selected repository file. Transfers write to a temporary path, verify a supplied SHA-256 when available, then register the completed file. Downloading never changes `capability_state` from `unvalidated`.
