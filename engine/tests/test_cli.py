@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, project_folders, projects, retry_job, revoke_project_folder, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
+from frontier_engine.cli import agent_activity, archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, project_folders, projects, retry_job, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -151,6 +151,19 @@ class CliTests(unittest.TestCase):
             self.assertEqual(workspace_tool(root, project_id, workspace, "write", "note.txt", "agent note")["path"], "note.txt")
             grant_project_folder(root, project_id, workspace, "read")
             self.assertEqual(workspace_tool(root, project_id, workspace, "read", "note.txt")["content"], "agent note")
+
+    def test_agent_activity_is_project_scoped_and_preserves_a_runtime_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); project_id = create_project(root, "Agent") ["id"]
+            with patch("frontier_engine.agent_runner.stream_ollama", side_effect=RuntimeError("FR-RUNTIME-OLLAMA-NOT-FOUND")):
+                with self.assertRaisesRegex(RuntimeError, "FR-RUNTIME-OLLAMA-NOT-FOUND"):
+                    run_agent(root, project_id, "qwen3", "Summarize the fixture")
+            activity = agent_activity(root, project_id)
+            self.assertEqual(activity["todos"][0]["state"], "failed")
+            self.assertEqual(activity["tool_calls"][0]["state"], "failed")
+            archive_project(root, project_id)
+            with self.assertRaisesRegex(Exception, "(?i)project"):
+                agent_activity(root, project_id)
 
     def test_artifacts_keep_versions_and_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

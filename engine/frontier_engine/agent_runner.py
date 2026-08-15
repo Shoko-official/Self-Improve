@@ -19,6 +19,7 @@ def run_local_agent(state: AgentStateStore, project_id: str, model: str, prompt:
         output = "".join(stream if stream is not None else stream_ollama(model, prompt))
     except Exception as error:
         state.record_tool_call(project_id, "agent.generate", json.dumps({"model": model}), "failed", json.dumps({"error": str(error)}))
+        state.transition_todo(todo_id, "failed")
         raise
     state.record_tool_call(project_id, "agent.generate", json.dumps({"model": model}), "succeeded", json.dumps({"output_chars": len(output)}))
     state.transition_todo(todo_id, "completed")

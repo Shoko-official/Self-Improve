@@ -153,6 +153,9 @@ class FrontierStore:
             raise KeyError(f"Active project not found: {project_id}")
         self.connection.commit()
 
+    def require_active_project(self, project_id: str) -> None:
+        self._require_active_project(project_id)
+
     def set_project_instructions(self, project_id: str, instructions: str) -> None:
         result = self.connection.execute(
             "UPDATE projects SET instructions = ? WHERE id = ? AND archived_at IS NULL",
