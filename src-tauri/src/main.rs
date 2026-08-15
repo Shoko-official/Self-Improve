@@ -1,6 +1,17 @@
 use serde::Serialize;
+use serde_json::json;
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::{Mutex, OnceLock};
+
+struct KernelBridge {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+}
+
+static KERNEL_BRIDGE: OnceLock<Mutex<Option<KernelBridge>>> = OnceLock::new();
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,6 +117,42 @@ fn local_generations_development(project_id: Option<String>) -> Result<serde_jso
     let mut arguments = vec!["generations".to_owned()];
     if let Some(project_id) = project_id { arguments.extend(["--project-id".to_owned(), project_id]); }
     run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn kernel_execute_development(project_id: String, code: String) -> Result<serde_json::Value, String> {
+    kernel_request(json!({"jsonrpc":"2.0","id":1,"method":"kernel.execute","params":{"project_id":project_id,"code":code}}))
+}
+
+#[tauri::command]
+fn kernel_restart_development(project_id: String) -> Result<serde_json::Value, String> {
+    kernel_request(json!({"jsonrpc":"2.0","id":1,"method":"kernel.restart","params":{"project_id":project_id}}))
+}
+
+fn kernel_request(request: serde_json::Value) -> Result<serde_json::Value, String> {
+    let bridge = KERNEL_BRIDGE.get_or_init(|| Mutex::new(None));
+    let mut guard = bridge.lock().map_err(|_| "FR-KERNEL-BRIDGE-LOCKED".to_owned())?;
+    if guard.is_none() {
+        let source_engine = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().map(|path| path.join("engine")).ok_or_else(|| "FR-ENGINE-SOURCE-MISSING".to_owned())?;
+        let python = std::env::var("FRONTIER_PYTHON").unwrap_or_else(|_| "python".to_owned());
+        let mut python_paths = vec![source_engine];
+        if let Some(existing) = std::env::var_os("PYTHONPATH") { python_paths.extend(std::env::split_paths(&existing)); }
+        let python_path = std::env::join_paths(python_paths).map_err(|_| "FR-ENGINE-PYTHONPATH-INVALID".to_owned())?;
+        let mut child = Command::new(python).args(["-m", "frontier_engine.cli", "kernel-stdio"]).env("PYTHONPATH", python_path).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_| "FR-KERNEL-BRIDGE-START-FAILED".to_owned())?;
+        let stdin = child.stdin.take().ok_or_else(|| "FR-KERNEL-BRIDGE-STDIN-MISSING".to_owned())?;
+        let stdout = child.stdout.take().ok_or_else(|| "FR-KERNEL-BRIDGE-STDOUT-MISSING".to_owned())?;
+        *guard = Some(KernelBridge { child, stdin, stdout: BufReader::new(stdout) });
+    }
+    let session = guard.as_mut().expect("kernel bridge initialized");
+    serde_json::to_writer(&mut session.stdin, &request).map_err(|_| "FR-KERNEL-BRIDGE-WRITE-FAILED".to_owned())?;
+    session.stdin.write_all(b"\n").map_err(|_| "FR-KERNEL-BRIDGE-WRITE-FAILED".to_owned())?;
+    session.stdin.flush().map_err(|_| "FR-KERNEL-BRIDGE-WRITE-FAILED".to_owned())?;
+    let mut line = String::new();
+    session.stdout.read_line(&mut line).map_err(|_| "FR-KERNEL-BRIDGE-READ-FAILED".to_owned())?;
+    if line.is_empty() { let _ = session.child.kill(); *guard = None; return Err("FR-KERNEL-BRIDGE-STOPPED".to_owned()); }
+    let response: serde_json::Value = serde_json::from_str(&line).map_err(|_| "FR-KERNEL-BRIDGE-INVALID-JSON".to_owned())?;
+    if response.get("error").is_some() { return Err(response["error"]["message"].as_str().unwrap_or("FR-KERNEL-RPC-FAILED").to_owned()); }
+    Ok(response["result"].clone())
 }
 
 #[tauri::command]
@@ -238,7 +285,7 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, retry_compute_job_development, local_generations_development, local_agent_activity_development, run_local_agent_development, search_huggingface_models_development, download_huggingface_model_development, install_ollama_model_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, search_project_artifacts_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development, create_python_environment_development])
+        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, retry_compute_job_development, local_generations_development, kernel_execute_development, kernel_restart_development, local_agent_activity_development, run_local_agent_development, search_huggingface_models_development, download_huggingface_model_development, install_ollama_model_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, search_project_artifacts_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development, create_python_environment_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
 }
