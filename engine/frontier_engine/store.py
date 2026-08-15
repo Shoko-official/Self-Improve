@@ -102,6 +102,21 @@ class FrontierStore:
                 started_at TEXT,
                 completed_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS generations (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL UNIQUE REFERENCES jobs(id),
+                runtime TEXT NOT NULL,
+                model TEXT NOT NULL,
+                prompt TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS generation_chunks (
+                generation_id TEXT NOT NULL REFERENCES generations(id),
+                sequence_number INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(generation_id, sequence_number)
+            );
             """
         )
         self.connection.commit()
@@ -384,6 +399,76 @@ class FrontierStore:
         except Exception:
             self.connection.rollback()
             raise
+
+    def claim_job(self, job_id: str) -> dict[str, object]:
+        result = self.connection.execute(
+            "UPDATE jobs SET state = 'running', started_at = ? WHERE id = ? AND state = 'queued'",
+            (_utc_now(), job_id),
+        )
+        if result.rowcount != 1:
+            raise ValueError("Job cannot be claimed unless it is queued.")
+        self.connection.commit()
+        return self.job(job_id)
+
+    def create_generation(
+        self,
+        project_id: str,
+        runtime: str,
+        model: str,
+        prompt: str,
+        session_id: str | None = None,
+    ) -> str:
+        if not runtime.strip() or not model.strip() or not prompt.strip():
+            raise ValueError("Generation runtime, model, and prompt are required.")
+        job_id = self.create_job(project_id, "model.generate", {"runtime": runtime, "model": model, "prompt": prompt}, session_id)
+        generation_id = str(uuid.uuid4())
+        self.connection.execute(
+            "INSERT INTO generations(id, job_id, runtime, model, prompt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (generation_id, job_id, runtime, model, prompt, _utc_now()),
+        )
+        self.connection.commit()
+        return generation_id
+
+    def append_generation_chunk(self, generation_id: str, content: str) -> None:
+        if not content:
+            return
+        generation = self.generation(generation_id)
+        if generation["state"] != "running":
+            raise ValueError("Generation can receive chunks only while running.")
+        sequence = len(generation["chunks"])
+        self.connection.execute(
+            "INSERT INTO generation_chunks(generation_id, sequence_number, content, created_at) VALUES (?, ?, ?, ?)",
+            (generation_id, sequence, content, _utc_now()),
+        )
+        self.connection.commit()
+
+    def generation(self, generation_id: str) -> dict[str, object]:
+        row = self.connection.execute(
+            """SELECT g.id, g.job_id, g.runtime, g.model, g.prompt, g.created_at,
+                      j.project_id, j.session_id, j.state, j.result_json, j.diagnostic_json
+               FROM generations g JOIN jobs j ON j.id = g.job_id WHERE g.id = ?""",
+            (generation_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"Generation not found: {generation_id}")
+        chunks = [str(chunk["content"]) for chunk in self.connection.execute(
+            "SELECT content FROM generation_chunks WHERE generation_id = ? ORDER BY sequence_number", (generation_id,)
+        )]
+        return {
+            "id": row["id"], "job_id": row["job_id"], "project_id": row["project_id"], "session_id": row["session_id"],
+            "runtime": row["runtime"], "model": row["model"], "prompt": row["prompt"], "state": row["state"],
+            "chunks": chunks, "output": "".join(chunks), "result": json.loads(row["result_json"]) if row["result_json"] else None,
+            "diagnostic": json.loads(row["diagnostic_json"]) if row["diagnostic_json"] else None,
+        }
+
+    def generations(self, project_id: str | None = None) -> list[dict[str, object]]:
+        where = "WHERE j.project_id = ?" if project_id is not None else ""
+        parameters: tuple[str, ...] = (project_id,) if project_id is not None else ()
+        rows = self.connection.execute(
+            f"SELECT g.id FROM generations g JOIN jobs j ON j.id = g.job_id {where} ORDER BY g.created_at DESC, g.id DESC",
+            parameters,
+        )
+        return [self.generation(str(row["id"])) for row in rows]
 
     def request_cancellation(self, job_id: str) -> dict[str, object]:
         job = self.job(job_id)

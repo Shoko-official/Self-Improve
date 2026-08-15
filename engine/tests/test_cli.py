@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, grant_project_folder, import_data, jobs, project_folders, projects, revoke_project_folder, search_artifacts, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, enqueue_job, export_data, generate_local, generations, grant_project_folder, import_data, jobs, project_folders, projects, revoke_project_folder, search_artifacts, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -102,6 +102,15 @@ class CliTests(unittest.TestCase):
             job = enqueue_job(root, project_id, "rag.ingest")
             self.assertEqual(jobs(root)["jobs"][0]["state"], "queued")
             self.assertEqual(cancel_job(root, job["id"])["state"], "cancelled")
+
+    def test_generations_are_listed_and_unsupported_runtime_is_diagnostic(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project_id = create_project(root, "Generations")["id"]
+            record = generate_local(root, project_id, "unknown", "model", "prompt")
+            self.assertEqual(record["state"], "failed")
+            self.assertEqual(record["diagnostic"]["code"], "FR-GENERATION-RUNTIME")
+            self.assertEqual(generations(root, project_id)["generations"][0]["id"], record["id"])
 
     def test_artifacts_keep_versions_and_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
