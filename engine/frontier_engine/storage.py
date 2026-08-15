@@ -11,6 +11,8 @@ from typing import Literal
 from urllib.parse import unquote, urlparse
 import urllib.error
 import urllib.request
+import json
+import xml.etree.ElementTree as ET
 
 StorageKind=Literal["s3","s3_compatible","gcs","azure_blob"]
 @dataclass(frozen=True)
@@ -18,6 +20,42 @@ class StorageProfile: kind:StorageKind; endpoint:str; container:str; prefix:str;
 @dataclass(frozen=True)
 class TransferManifest: profile:StorageProfile; object_key:str; bytes:int; sha256:str; operation:Literal["import","export","delete"]; egress_bytes:int; content:bytes=b""
 class StorageApprovalRequired(PermissionError): pass
+
+def list_presigned_objects(profile:StorageProfile, presigned_url:str, approved:bool, max_bytes:int=1_000_000, timeout_seconds:float=30.0)->dict[str,object]:
+ if profile.kind not in {"s3","s3_compatible","gcs","azure_blob"}: raise ValueError("FR-STORAGE-KIND: unsupported storage kind")
+ parsed=urlparse(presigned_url); profile_host=urlparse(profile.endpoint).hostname
+ if parsed.scheme not in {"https","http"} or not parsed.query: raise ValueError("FR-STORAGE-PRESIGNED-URL: a signed query URL is required")
+ if parsed.username or parsed.password or (profile_host and parsed.hostname != profile_host): raise ValueError("FR-STORAGE-PRESIGNED-URL: URL host or embedded credentials are invalid")
+ if max_bytes <= 0 or timeout_seconds <= 0: raise ValueError("FR-STORAGE-LIMIT: limits must be positive")
+ if not approved: raise StorageApprovalRequired("FR-STORAGE-EGRESS-APPROVAL: listing requires explicit approval")
+ try:
+  with urllib.request.urlopen(urllib.request.Request(presigned_url, method="GET"), timeout=timeout_seconds) as response:
+   payload=response.read(max_bytes+1)
+ except urllib.error.HTTPError as error:
+  raise ValueError(f"FR-STORAGE-REMOTE-HTTP:{error.code}") from error
+ except (urllib.error.URLError, TimeoutError) as error:
+  raise ValueError(f"FR-STORAGE-REMOTE-NETWORK:{error}") from error
+ if len(payload) > max_bytes: raise ValueError("FR-STORAGE-LIST-TOO-LARGE")
+ objects:list[dict[str,object]]=[]
+ try:
+  parsed_json=json.loads(payload)
+  entries=parsed_json.get("Contents", parsed_json.get("objects", [])) if isinstance(parsed_json, dict) else []
+  if isinstance(entries, list):
+   for entry in entries:
+    if isinstance(entry, dict) and isinstance(entry.get("Key", entry.get("key")), str):
+     key=entry.get("Key", entry.get("key"));
+     if key.startswith(profile.prefix): objects.append({"key":key,"size":entry.get("Size",entry.get("size")),"etag":entry.get("ETag",entry.get("etag"))})
+ except (json.JSONDecodeError, AttributeError):
+  try:
+   root=ET.fromstring(payload)
+   for item in root.iter():
+    if item.tag.rsplit("}",1)[-1] == "Contents":
+     values={child.tag.rsplit("}",1)[-1]:child.text for child in item}
+     key=values.get("Key")
+     if key and key.startswith(profile.prefix): objects.append({"key":key,"size":int(values["Size"]) if values.get("Size","").isdigit() else None,"etag":values.get("ETag")})
+  except (ET.ParseError, ValueError) as error:
+   raise ValueError("FR-STORAGE-LIST-FORMAT") from error
+ return {"state":"succeeded","kind":profile.kind,"prefix":profile.prefix,"objects":objects,"count":len(objects)}
 
 def execute_presigned_transfer(manifest:TransferManifest, presigned_url:str, approved:bool, timeout_seconds:float=30.0)->dict[str,object]:
  if manifest.profile.kind not in {"s3","s3_compatible","gcs","azure_blob"}: raise ValueError("FR-STORAGE-KIND: unsupported storage kind")
