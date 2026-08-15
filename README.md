@@ -14,6 +14,7 @@ Engine protocol smoke test:
 ```powershell
 $env:PYTHONPATH = 'engine'
 python -m frontier_engine doctor
+python -m frontier_engine.cli status --json
 ```
 
 The project does not yet include a model runtime pack, remote-provider credential, or scientific-kernel environment. These absent capabilities are deliberately reported as unavailable rather than emulated.
