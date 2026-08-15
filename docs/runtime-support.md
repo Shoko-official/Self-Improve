@@ -10,4 +10,6 @@ The desktop Models surface exposes this same operation through development-only 
 
 Managed bundles use a JSON manifest with runtime/version, protocol version, target platform and architecture, executable-relative path, and SHA-256. `frontierctl verify-runtime-bundle --manifest PATH --bundle-root PATH` checks platform, path containment, file presence, and exact bytes. A missing or mismatched bundle is reported with a stable `FR-BUNDLE-*` diagnostic; verification never falls back to a host runtime.
 
+Tauri packages the `runtime-packs` manifest directory as a resource so a future signed runtime artifact can be discovered in the packaged app. The current repository contains contract metadata only; packaged builds still refuse engine IPC until a verified executable bundle is present.
+
 The model registry can search the public Hugging Face model index and download one explicitly selected repository file. Transfers write to a temporary path, verify a supplied SHA-256 when available, then register the completed file. Downloading never changes `capability_state` from `unvalidated`.
