@@ -44,6 +44,20 @@ class FrontierStoreTests(unittest.TestCase):
         with self.assertRaises(ArchivedProjectError):
             self.store.create_session(project_id, "Should not be created")
 
+    def test_projects_and_sessions_support_configuration_and_literal_search(self) -> None:
+        project_id = self.store.create_project("Cell atlas", "Initial scope")
+        session_id = self.store.create_session(project_id, "Review batch effects", "extended")
+        self.store.set_project_instructions(project_id, "Preserve donor identity.")
+        self.store.set_session_reasoning_effort(session_id, "compact")
+        result = self.store.search_sessions("batch", project_id)
+        self.assertEqual(result[0]["project_name"], "Cell atlas")
+        self.assertEqual(result[0]["reasoning_effort"], "compact")
+        with self.assertRaisesRegex(ValueError, "Unsupported"):
+            self.store.create_session(project_id, "Invalid", "maximum")
+        self.store.archive_project(project_id)
+        with self.assertRaises(ArchivedProjectError):
+            self.store.set_project_instructions(project_id, "Changed")
+
     def test_jobs_are_durable_and_cancellation_is_explicit(self) -> None:
         project_id = self.store.create_project("Jobs")
         job_id = self.store.create_job(project_id, "rag.ingest", {"source": "paper.pdf"})

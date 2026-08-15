@@ -33,8 +33,10 @@ fn workspace_projects_development() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn create_workspace_project_development(name: String) -> Result<serde_json::Value, String> {
-    run_development_engine(&["projects".to_owned(), "--name".to_owned(), name])
+fn create_workspace_project_development(name: String, instructions: Option<String>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["projects".to_owned(), "--name".to_owned(), name];
+    if let Some(instructions) = instructions { arguments.extend(["--instructions".to_owned(), instructions]); }
+    run_development_engine(&arguments)
 }
 
 #[tauri::command]
@@ -43,17 +45,35 @@ fn workspace_sessions_development(project_id: String) -> Result<serde_json::Valu
 }
 
 #[tauri::command]
-fn create_workspace_session_development(project_id: String, title: String, parent_session_id: Option<String>) -> Result<serde_json::Value, String> {
+fn create_workspace_session_development(project_id: String, title: String, parent_session_id: Option<String>, reasoning_effort: Option<String>) -> Result<serde_json::Value, String> {
     let mut arguments = vec!["sessions".to_owned(), "--project-id".to_owned(), project_id, "--title".to_owned(), title];
     if let Some(parent_session_id) = parent_session_id {
         arguments.extend(["--parent-session-id".to_owned(), parent_session_id]);
     }
+    if let Some(reasoning_effort) = reasoning_effort { arguments.extend(["--reasoning-effort".to_owned(), reasoning_effort]); }
     run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn set_workspace_project_instructions_development(project_id: String, instructions: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["set-project-instructions".to_owned(), "--project-id".to_owned(), project_id, "--instructions".to_owned(), instructions])
 }
 
 #[tauri::command]
 fn set_workspace_session_starred_development(session_id: String, starred: bool) -> Result<serde_json::Value, String> {
     run_development_engine(&["star-session".to_owned(), "--session-id".to_owned(), session_id, "--starred".to_owned(), starred.to_string()])
+}
+
+#[tauri::command]
+fn set_workspace_session_reasoning_development(session_id: String, reasoning_effort: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["set-session-reasoning".to_owned(), "--session-id".to_owned(), session_id, "--reasoning-effort".to_owned(), reasoning_effort])
+}
+
+#[tauri::command]
+fn search_workspace_sessions_development(query: String, project_id: Option<String>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["search-sessions".to_owned(), "--query".to_owned(), query];
+    if let Some(project_id) = project_id { arguments.extend(["--project-id".to_owned(), project_id]); }
+    run_development_engine(&arguments)
 }
 
 #[tauri::command]
@@ -161,7 +181,7 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_session_starred_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development])
+        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
 }
