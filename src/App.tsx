@@ -1,52 +1,30 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 
-type CapabilityReport = {
-  operatingSystem: string;
-  architecture: string;
-  logicalCores: number;
-  capturedAt: number;
-};
+type CapabilityReport = { operatingSystem: string; architecture: string; logicalCores: number; capturedAt: number; };
+type Surface = "workspaces" | "models" | "science" | "artifacts" | "compute" | "settings";
 
-const copy = {
-  en: {
-    title: "Frontier", subtitle: "Local-first AI and scientific workbench",
-    probe: "Run hardware probe", unavailable: "Native capability probe is available in the desktop application.",
-    areas: ["Workspaces", "Models", "Science", "Artifacts", "Compute", "Settings"]
-  },
-  fr: {
-    title: "Frontier", subtitle: "Atelier IA et scientifique, local par défaut",
-    probe: "Lancer la sonde matérielle", unavailable: "La sonde native est disponible dans l’application bureau.",
-    areas: ["Espaces", "Modèles", "Science", "Artefacts", "Calcul", "Réglages"]
-  }
-};
+const surfaces: Array<{ id: Surface; label: string; caption: string }> = [
+  { id: "workspaces", label: "Workspaces", caption: "Projects and sessions" }, { id: "models", label: "Models", caption: "Runtime evidence" },
+  { id: "science", label: "Science", caption: "Research records" }, { id: "artifacts", label: "Artifacts", caption: "Versioned outputs" },
+  { id: "compute", label: "Compute", caption: "Durable jobs" }, { id: "settings", label: "Settings", caption: "Data boundaries" }
+];
 
 export function App() {
-  const [locale, setLocale] = useState<keyof typeof copy>("fr");
+  const [surface, setSurface] = useState<Surface>("workspaces");
   const [report, setReport] = useState<CapabilityReport | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const text = copy[locale];
-
-  async function probe() {
-    setError(null);
-    try {
-      setReport(await invoke<CapabilityReport>("capability_report"));
-    } catch {
-      setError(text.unavailable);
-    }
-  }
-
+  const active = surfaces.find(item => item.id === surface)!;
+  async function probe() { setError(null); try { setReport(await invoke<CapabilityReport>("capability_report")); } catch { setError("The native capability probe is only available in the Frontier desktop application."); } }
   useEffect(() => { void probe(); }, []);
-
-  return <main className="shell">
-    <aside><div className="brand">{text.title}</div><nav>{text.areas.map(area => <button key={area}>{area}</button>)}</nav></aside>
-    <section className="content">
-      <header><div><p className="eyebrow">LOCAL FIRST</p><h1>{text.subtitle}</h1></div><button className="locale" onClick={() => setLocale(locale === "fr" ? "en" : "fr")}>{locale === "fr" ? "EN" : "FR"}</button></header>
-      <article className="panel"><p className="eyebrow">CAPABILITY EVIDENCE</p><h2>Host capability report</h2>
-        {report ? <dl><dt>Operating system</dt><dd>{report.operatingSystem}</dd><dt>Architecture</dt><dd>{report.architecture}</dd><dt>Logical cores</dt><dd>{report.logicalCores}</dd><dt>Captured</dt><dd>{new Date(report.capturedAt * 1000).toLocaleString()}</dd></dl> : <p>{error ?? "Probing host capabilities…"}</p>}
-        <button className="primary" onClick={() => void probe()}>{text.probe}</button>
-      </article>
-      <article className="panel muted"><p className="eyebrow">TRUST BOUNDARY</p><p>Remote providers, storage writes, and external compute require an explicit, scoped approval. No provider fallback is automatic.</p></article>
-    </section>
-  </main>;
+  return <main className="shell"><aside className="rail"><div className="brand"><span>FR</span><strong>Frontier</strong></div><p className="rail-label">WORKBENCH</p><nav aria-label="Frontier workbench">{surfaces.map((item, index) => <button key={item.id} className={surface === item.id ? "active" : ""} onClick={() => setSurface(item.id)} aria-current={surface === item.id ? "page" : undefined}><span className="index">{String(index + 1).padStart(2, "0")}</span><span>{item.label}<small>{item.caption}</small></span></button>)}</nav><div className="rail-foot"><span className="pulse" />Local data boundary active</div></aside><section className="content"><header><div><p className="eyebrow">{active.caption}</p><h1>{active.label}</h1></div><p className="session">No remote provider connected</p></header>{surface === "workspaces" && <WorkspaceSurface />}{surface === "models" && <ModelsSurface report={report} error={error} probe={probe} />}{surface === "science" && <ScienceSurface />}{surface === "artifacts" && <ArtifactsSurface />}{surface === "compute" && <ComputeSurface />}{surface === "settings" && <SettingsSurface />}</section></main>;
 }
+
+function WorkspaceSurface() { return <Surface title="No local projects open" mark="PROJECT LEDGER" text="Projects, instructions, sessions, and forks persist in the local Frontier store. Create and manage them through the engine API; the desktop project editor is not connected yet." rows={["Archive protects history from new writes", "Session forks remain inside their project", "Reasoning effort and stars are stored per session"]} />; }
+function ModelsSurface({ report, error, probe }: { report: CapabilityReport | null; error: string | null; probe: () => Promise<void> }) { return <section className="surface"><div className="surface-mark">HOST EVIDENCE</div><h2>{report ? "Host capability report" : "Capability probe unavailable"}</h2>{report ? <dl><dt>Operating system</dt><dd>{report.operatingSystem}</dd><dt>Architecture</dt><dd>{report.architecture}</dd><dt>Logical cores</dt><dd>{report.logicalCores}</dd><dt>Captured</dt><dd>{new Date(report.capturedAt * 1000).toLocaleString()}</dd></dl> : <p>{error ?? "Probing host capabilities…"}</p>}<button className="action" onClick={() => void probe()}>Refresh capability evidence</button><Evidence rows={["No inference runtime pack installed", "No model file imported", "No remote provider has received data"]} /></section>; }
+function ScienceSurface() { return <Surface mark="RESEARCH RECORD" title="Scientific state is durable" text="Artifact versions retain independent message, code, execution-log, environment, input, and review records. An execution log is evidence of what ran; a reviewer is not a substitute for a rerun." rows={["Python/R kernels: not installed", "Annotations and reviewer: not connected", "Literature citations retain URI and source offsets"]} />; }
+function ArtifactsSurface() { return <Surface mark="LINEAGE" title="Immutable content, versioned metadata" text="Artifact payloads are content-addressed with SHA-256 and version records are append-only. The store keeps provenance separately so a later review cannot rewrite an execution record." rows={["Content paths are hash-addressed", "Versions are ordered per artifact", "Archived projects remain readable"]} />; }
+function ComputeSurface() { return <Surface mark="SCHEDULER" title="No jobs queued" text="The local scheduler persists queued, running, cancellation-requested, cancelled, succeeded, and failed states. External compute is unavailable until an approved host or provider is configured." rows={["No SSH host configured", "No cloud compute account configured", "Cancellation never becomes a success implicitly"]} />; }
+function SettingsSurface() { return <Surface mark="TRUST BOUNDARY" title="Local by default" text="The webview has no unrestricted filesystem, shell, secret, or network authority. External provider, storage, and compute actions require an explicit scoped approval before they are introduced." rows={["Provider fallback: forbidden", "Remote egress: no provider configured", "Runtime packs: none installed"]} />; }
+function Surface({ mark, title, text, rows }: { mark: string; title: string; text: string; rows: string[] }) { return <section className="surface"><div className="surface-mark">{mark}</div><h2>{title}</h2><p>{text}</p><Evidence rows={rows} /></section>; }
+function Evidence({ rows }: { rows: string[] }) { return <ul className="evidence">{rows.map(row => <li key={row}><span>verified state</span>{row}</li>)}</ul>; }
