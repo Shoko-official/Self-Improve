@@ -11,6 +11,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from frontier_engine.__main__ import doctor
 from frontier_engine.literature import LiteratureStore
+from frontier_engine.environments import list_manifests, probe_environment
 from frontier_engine.store import FrontierStore
 
 
@@ -229,7 +230,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "environments", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -248,6 +249,7 @@ def main() -> None:
     parser.add_argument("--query")
     parser.add_argument("--source")
     parser.add_argument("--result-count", type=int)
+    parser.add_argument("--language", choices=("python", "r"))
     args = parser.parse_args()
     root = data_root()
     if args.command == "doctor":
@@ -256,6 +258,8 @@ def main() -> None:
         result = status(root)
     elif args.command == "config":
         result = {"data_root": str(root), "environment_variable": "FRONTIER_DATA_DIR"}
+    elif args.command == "environments":
+        result = {"manifests": list_manifests(root), "probe": probe_environment(args.language or "python")}
     elif args.command == "projects":
         result = create_project(root, args.name) if args.name is not None else projects(root)
     elif args.command == "sessions":
