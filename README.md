@@ -15,6 +15,7 @@ Engine protocol smoke test:
 $env:PYTHONPATH = 'engine'
 python -m frontier_engine doctor
 python -m frontier_engine.cli status --json
+python -m frontier_engine.cli serve --json
 python -m frontier_engine.cli projects --json
 ```
 
