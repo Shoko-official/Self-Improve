@@ -135,6 +135,13 @@ class CliTests(unittest.TestCase):
             hub_type.return_value.search_models.return_value = [{"modelId": "org/model"}]
             self.assertEqual(search_huggingface_models("model")["models"][0]["modelId"], "org/model")
 
+    def test_create_environment_command_creates_a_real_local_python_environment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "create-environment", "--name", "analysis", "--data-dir", directory, "--json"], capture_output=True, check=True, text=True)
+            record = json.loads(result.stdout)
+            self.assertEqual(record["name"], "analysis")
+            self.assertTrue(Path(record["executable"]).is_file())
+
     def test_shell_command_requires_existing_project_folder_grant(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "state"; workspace = Path(directory) / "workspace"; workspace.mkdir()
