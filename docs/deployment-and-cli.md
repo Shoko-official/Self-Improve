@@ -8,4 +8,6 @@ During development, run `python -m frontier_engine.cli doctor --json` for the ho
 
 Before enabling a packaged engine, verify its supplied manifest with `frontierctl verify-runtime-bundle --manifest PATH --bundle-root PATH`. The command returns `valid: true` only for the exact target platform, executable path, and SHA-256 recorded by the bundle publisher.
 
+Run `python scripts/release_gate.py` from a clean checkout before a release. It checks required repository files, acceptance-matrix coverage, all three CI operating systems, and a clean worktree. Use `--allow-dirty` only while iterating locally; a passing gate does not override an acceptance row that is explicitly `not_verifiable_here`.
+
 Daemon lifecycle, update verification, and remote tunnel support are not implemented yet. `serve --duration-seconds N` exists for controlled tests and demonstrations; the default service runs until interrupted.

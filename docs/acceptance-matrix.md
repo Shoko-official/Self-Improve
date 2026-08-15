@@ -24,6 +24,7 @@
 | Agent workspace tools | partially_verified | Typed list/read/write tools reject traversal, require exact project folder grants, respect archived projects, and record call outcomes in `engine/tests/test_workspace_tools.py` |
 | Diagnostics | partially_verified | Stable codes, evidence/fact separation, confidence-bounded inferences, and redaction are covered by `engine/tests/test_diagnostics.py` |
 | Benchmark | partially_verified | Raw samples, required environment fingerprints, summary metrics, and comparison deltas are covered by `engine/tests/test_benchmarks.py` |
+| Release gate | partially_verified | `scripts/release_gate.py` checks required files, acceptance-matrix areas, cross-platform CI configuration, and clean worktree evidence |
 | Automation | partially_verified | Durable definitions, dry-run history, and external-effect approval gates are covered by `engine/tests/test_automations.py` |
 | Operational UX | partially_verified | Durable lock-screen-safe notification records, deep links, and acknowledgement states are covered by `engine/tests/test_notifications.py` |
 | Remote providers | not_verifiable_here | No credential or provider configured |
