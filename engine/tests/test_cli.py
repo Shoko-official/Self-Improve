@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, jobs, project_folders, projects, revoke_project_folder, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, project_folders, projects, revoke_project_folder, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -112,6 +112,14 @@ class CliTests(unittest.TestCase):
             self.assertEqual(record["state"], "failed")
             self.assertEqual(record["diagnostic"]["code"], "FR-GENERATION-RUNTIME")
             self.assertEqual(generations(root, project_id)["generations"][0]["id"], record["id"])
+
+    def test_ollama_install_command_returns_its_durable_job_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); project_id = create_project(root, "Runtime")["id"]
+            with patch("frontier_engine.cli.install_local_ollama_model", return_value={"id": "job", "state": "failed", "events": []}) as install:
+                record = install_ollama_model(root, project_id, "qwen3")
+            install.assert_called_once()
+            self.assertEqual(record["state"], "failed")
 
     def test_huggingface_commands_keep_network_transfer_explicit(self) -> None:
         with patch("frontier_engine.cli.HuggingFaceHub") as hub_type:

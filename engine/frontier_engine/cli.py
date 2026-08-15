@@ -23,6 +23,7 @@ from frontier_engine.loopback import LoopbackService
 from frontier_engine.model_registry import HuggingFaceHub, ModelRegistry
 from frontier_engine.environments import list_manifests, probe_environment
 from frontier_engine.generation import run_generation
+from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
 from frontier_engine.runtimes import stream_ollama
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
@@ -290,6 +291,14 @@ def generate_local(root: Path, project_id: str, runtime: str, model: str, prompt
         store.close()
 
 
+def install_ollama_model(root: Path, project_id: str, model: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        return install_local_ollama_model(store, project_id, model)
+    finally:
+        store.close()
+
+
 def search_huggingface_models(query: str, limit: int = 10) -> dict[str, object]:
     return {"query": query, "models": HuggingFaceHub().search_models(query, limit)}
 
@@ -466,7 +475,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "agent-workspace", "shell-exec", "generations", "generate-local", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "agent-workspace", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -623,6 +632,10 @@ def main() -> None:
         if args.project_id is None or args.runtime is None or args.model is None or args.prompt is None:
             parser.error("generate-local requires --project-id, --runtime, --model, and --prompt")
         result = generate_local(root, args.project_id, args.runtime, args.model, args.prompt, args.session_id)
+    elif args.command == "install-ollama-model":
+        if args.project_id is None or args.model is None:
+            parser.error("install-ollama-model requires --project-id and --model")
+        result = install_ollama_model(root, args.project_id, args.model)
     elif args.command == "model-search":
         if args.query is None:
             parser.error("model-search requires --query")
