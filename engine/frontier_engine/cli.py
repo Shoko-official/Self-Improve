@@ -545,9 +545,9 @@ def main() -> None:
             result = start_background_service(root)
             print(json.dumps(result, sort_keys=True) if args.json else json.dumps(result, indent=2, sort_keys=True))
             return
-        service = LoopbackService(args.loopback_port)
+        service = LoopbackService(args.loopback_port, root)
         service.start()
-        public_result = {"url": service.url, "status_path": "/status", "authorization": "Bearer"}
+        public_result = {"url": service.url, "status_path": "/status", "rpc_path": "/rpc", "authorization": "Bearer"}
         if not args.background_child:
             print(json.dumps({**public_result, "token": service.token}, sort_keys=True) if args.json else json.dumps({**public_result, "token": service.token}, indent=2, sort_keys=True))
         stop_event = threading.Event()
