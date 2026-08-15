@@ -20,6 +20,8 @@ from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
 from frontier_engine.environments import list_manifests, probe_environment
+from frontier_engine.generation import run_generation
+from frontier_engine.runtimes import stream_ollama
 from frontier_engine.store import FrontierStore
 
 
@@ -259,6 +261,31 @@ def cancel_job(root: Path, job_id: str) -> dict[str, object]:
     return job
 
 
+def generations(root: Path, project_id: str | None = None, generation_id: str | None = None) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        if generation_id is not None:
+            return store.generation(generation_id)
+        return {"project_id": project_id, "generations": store.generations(project_id)}
+    finally:
+        store.close()
+
+
+def generate_local(root: Path, project_id: str, runtime: str, model: str, prompt: str, session_id: str | None = None) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        generation_id = store.create_generation(project_id, runtime, model, prompt, session_id)
+        if runtime != "ollama":
+            job_id = str(store.generation(generation_id)["job_id"])
+            store.claim_job(job_id)
+            store.fail_job(job_id, {"code": "FR-GENERATION-RUNTIME", "detail": f"Unsupported local runtime: {runtime}"})
+            return store.generation(generation_id)
+        list(run_generation(store, generation_id, stream_ollama(model, prompt)))
+        return store.generation(generation_id)
+    finally:
+        store.close()
+
+
 def artifacts(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -400,7 +427,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "generations", "generate-local", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -418,6 +445,10 @@ def main() -> None:
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
     parser.add_argument("--job-id")
+    parser.add_argument("--generation-id")
+    parser.add_argument("--runtime")
+    parser.add_argument("--model")
+    parser.add_argument("--prompt")
     parser.add_argument("--artifact-id")
     parser.add_argument("--media-type")
     parser.add_argument("--content", default="")
@@ -527,6 +558,12 @@ def main() -> None:
         if args.job_id is None:
             parser.error("cancel-job requires --job-id")
         result = cancel_job(root, args.job_id)
+    elif args.command == "generations":
+        result = generations(root, args.project_id, args.generation_id)
+    elif args.command == "generate-local":
+        if args.project_id is None or args.runtime is None or args.model is None or args.prompt is None:
+            parser.error("generate-local requires --project-id, --runtime, --model, and --prompt")
+        result = generate_local(root, args.project_id, args.runtime, args.model, args.prompt, args.session_id)
     elif args.command == "artifacts":
         if args.project_id is None:
             parser.error("artifacts requires --project-id")
