@@ -12,4 +12,10 @@ describe("translate", () => {
     expect(surfaceText("fr", "evidenceReview")).toBe("Revue des preuves");
     expect(surfaceText("fr", "run")).toBe("Exécuter");
   });
+
+  it("resolves workspace form copy in both supported languages", () => {
+    expect(surfaceText("en", "createProject")).toBe("Create project");
+    expect(surfaceText("fr", "createProject")).toBe("Créer le projet");
+    expect(surfaceText("fr", "refreshProjectLedger")).toBe("Actualiser le registre des projets");
+  });
 });
