@@ -77,6 +77,19 @@ class FrontierStore:
                 created_at TEXT NOT NULL,
                 UNIQUE(artifact_id, version_number)
             );
+            CREATE TABLE IF NOT EXISTS jobs (
+                id TEXT PRIMARY KEY,
+                project_id TEXT NOT NULL REFERENCES projects(id),
+                session_id TEXT REFERENCES sessions(id),
+                operation TEXT NOT NULL,
+                state TEXT NOT NULL CHECK(state IN ('queued', 'running', 'cancel_requested', 'cancelled', 'succeeded', 'failed')),
+                request_json TEXT NOT NULL,
+                result_json TEXT,
+                diagnostic_json TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT
+            );
             """
         )
         self.connection.commit()
@@ -209,6 +222,104 @@ class FrontierStore:
             for row in rows
         ]
 
+    def create_job(
+        self,
+        project_id: str,
+        operation: str,
+        request: Mapping[str, object],
+        session_id: str | None = None,
+    ) -> str:
+        self._require_active_project(project_id)
+        if not operation:
+            raise ValueError("A job operation is required.")
+        self._require_project_session(project_id, session_id)
+        job_id = str(uuid.uuid4())
+        self.connection.execute(
+            """INSERT INTO jobs(id, project_id, session_id, operation, state, request_json, created_at)
+               VALUES (?, ?, ?, ?, 'queued', ?, ?)""",
+            (job_id, project_id, session_id, operation, _json(request), _utc_now()),
+        )
+        self.connection.commit()
+        return job_id
+
+    def claim_next_job(self) -> dict[str, object] | None:
+        self.connection.execute("BEGIN IMMEDIATE")
+        try:
+            row = self.connection.execute(
+                "SELECT * FROM jobs WHERE state = 'queued' ORDER BY created_at, id LIMIT 1"
+            ).fetchone()
+            if row is None:
+                self.connection.commit()
+                return None
+            started_at = _utc_now()
+            self.connection.execute(
+                "UPDATE jobs SET state = 'running', started_at = ? WHERE id = ?", (started_at, row["id"])
+            )
+            self.connection.commit()
+            return self.job(row["id"])
+        except Exception:
+            self.connection.rollback()
+            raise
+
+    def request_cancellation(self, job_id: str) -> dict[str, object]:
+        job = self.job(job_id)
+        if job["state"] == "queued":
+            self._set_job_state(job_id, "cancelled", completed_at=_utc_now())
+        elif job["state"] == "running":
+            self._set_job_state(job_id, "cancel_requested")
+        else:
+            raise ValueError(f"Job cannot be cancelled from state: {job['state']}")
+        return self.job(job_id)
+
+    def complete_job(self, job_id: str, result: Mapping[str, object]) -> dict[str, object]:
+        job = self.job(job_id)
+        if job["state"] == "running":
+            self._set_job_state(job_id, "succeeded", result=result, completed_at=_utc_now())
+        elif job["state"] == "cancel_requested":
+            self._set_job_state(job_id, "cancelled", completed_at=_utc_now())
+        else:
+            raise ValueError(f"Job cannot complete from state: {job['state']}")
+        return self.job(job_id)
+
+    def fail_job(self, job_id: str, diagnostic: Mapping[str, object]) -> dict[str, object]:
+        job = self.job(job_id)
+        if job["state"] not in {"running", "cancel_requested"}:
+            raise ValueError(f"Job cannot fail from state: {job['state']}")
+        self._set_job_state(job_id, "failed", diagnostic=diagnostic, completed_at=_utc_now())
+        return self.job(job_id)
+
+    def job(self, job_id: str) -> dict[str, object]:
+        row = self.connection.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"Job not found: {job_id}")
+        return _job_record(row)
+
+    def _set_job_state(
+        self,
+        job_id: str,
+        state: str,
+        *,
+        result: Mapping[str, object] | None = None,
+        diagnostic: Mapping[str, object] | None = None,
+        completed_at: str | None = None,
+    ) -> None:
+        self.connection.execute(
+            """UPDATE jobs SET state = ?, result_json = COALESCE(?, result_json),
+               diagnostic_json = COALESCE(?, diagnostic_json), completed_at = COALESCE(?, completed_at)
+               WHERE id = ?""",
+            (state, _json(result) if result is not None else None, _json(diagnostic) if diagnostic is not None else None, completed_at, job_id),
+        )
+        self.connection.commit()
+
+    def _require_project_session(self, project_id: str, session_id: str | None) -> None:
+        if session_id is None:
+            return
+        session = self.connection.execute(
+            "SELECT project_id FROM sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        if session is None or session["project_id"] != project_id:
+            raise ValueError("A job session must belong to its project.")
+
     def _require_active_project(self, project_id: str) -> None:
         row = self.connection.execute(
             "SELECT archived_at FROM projects WHERE id = ?", (project_id,)
@@ -221,3 +332,16 @@ class FrontierStore:
 
 def _json(value: Mapping[str, object] | None) -> str:
     return json.dumps(value or {}, sort_keys=True, separators=(",", ":"))
+
+
+def _job_record(row: sqlite3.Row) -> dict[str, object]:
+    return {
+        "id": row["id"],
+        "project_id": row["project_id"],
+        "session_id": row["session_id"],
+        "operation": row["operation"],
+        "state": row["state"],
+        "request": json.loads(row["request_json"]),
+        "result": json.loads(row["result_json"]) if row["result_json"] else None,
+        "diagnostic": json.loads(row["diagnostic_json"]) if row["diagnostic_json"] else None,
+    }

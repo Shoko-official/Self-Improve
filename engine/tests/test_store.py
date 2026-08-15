@@ -43,3 +43,23 @@ class FrontierStoreTests(unittest.TestCase):
         self.store.archive_project(project_id)
         with self.assertRaises(ArchivedProjectError):
             self.store.create_session(project_id, "Should not be created")
+
+    def test_jobs_are_durable_and_cancellation_is_explicit(self) -> None:
+        project_id = self.store.create_project("Jobs")
+        job_id = self.store.create_job(project_id, "rag.ingest", {"source": "paper.pdf"})
+        self.store.close()
+        self.store = FrontierStore(Path(self.temp_dir.name))
+        self.assertEqual(self.store.job(job_id)["state"], "queued")
+        self.assertEqual(self.store.claim_next_job()["state"], "running")
+        self.assertEqual(self.store.request_cancellation(job_id)["state"], "cancel_requested")
+        self.assertEqual(self.store.complete_job(job_id, {"ignored": True})["state"], "cancelled")
+        with self.assertRaises(ValueError):
+            self.store.complete_job(job_id, {})
+
+    def test_failed_job_carries_a_diagnostic_record(self) -> None:
+        project_id = self.store.create_project("Failures")
+        job_id = self.store.create_job(project_id, "model.generate", {})
+        self.store.claim_next_job()
+        job = self.store.fail_job(job_id, {"code": "FR-MEM-OOM", "evidence": ["allocator refused reservation"]})
+        self.assertEqual(job["state"], "failed")
+        self.assertEqual(job["diagnostic"]["code"], "FR-MEM-OOM")
