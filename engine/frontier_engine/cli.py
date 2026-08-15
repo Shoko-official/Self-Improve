@@ -16,6 +16,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from frontier_engine.__main__ import doctor
+from frontier_engine.agent_state import AgentStateStore
 from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
@@ -25,6 +26,7 @@ from frontier_engine.generation import run_generation
 from frontier_engine.runtimes import stream_ollama
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
+from frontier_engine.workspace_tools import ProjectWorkspaceTools
 
 
 _BACKGROUND_PROCESSES: dict[int, subprocess.Popen[bytes]] = {}
@@ -308,6 +310,21 @@ def execute_shell(root: Path, project_id: str, working_directory: Path, command:
         store.close()
 
 
+def workspace_tool(root: Path, project_id: str, workspace: Path, action: str, relative_path: str | None = None, content: str | None = None) -> dict[str, object]:
+    store = FrontierStore(root); agent = AgentStateStore(root / "agent.sqlite3")
+    try:
+        tools = ProjectWorkspaceTools(store, agent, project_id, workspace)
+        if action == "list": return {"files": tools.list_files()}
+        if relative_path is None: raise ValueError("Workspace read/write requires a relative path.")
+        if action == "read": return {"path": relative_path, "content": tools.read_file(relative_path)}
+        if action == "write":
+            if content is None: raise ValueError("Workspace write requires content.")
+            return {"path": relative_path, "written": str(tools.write_file(relative_path, content))}
+        raise ValueError("Unsupported workspace tool action.")
+    finally:
+        agent.close(); store.close()
+
+
 def artifacts(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -449,7 +466,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "shell-exec", "generations", "generate-local", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "agent-workspace", "shell-exec", "generations", "generate-local", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -467,6 +484,10 @@ def main() -> None:
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
     parser.add_argument("--working-directory", type=Path)
+    parser.add_argument("--workspace", type=Path)
+    parser.add_argument("--workspace-action", choices=("list", "read", "write"))
+    parser.add_argument("--path")
+    parser.add_argument("--text")
     parser.add_argument("--shell-arg", action="append")
     parser.add_argument("--timeout-seconds", type=float, default=30)
     parser.add_argument("--job-id")
@@ -592,6 +613,10 @@ def main() -> None:
         if args.project_id is None or args.working_directory is None or args.shell_arg is None:
             parser.error("shell-exec requires --project-id, --working-directory, and one or more --shell-arg values")
         result = execute_shell(root, args.project_id, args.working_directory, args.shell_arg, args.timeout_seconds)
+    elif args.command == "agent-workspace":
+        if args.project_id is None or args.workspace is None or args.workspace_action is None:
+            parser.error("agent-workspace requires --project-id, --workspace, and --workspace-action")
+        result = workspace_tool(root, args.project_id, args.workspace, args.workspace_action, args.path, args.text)
     elif args.command == "generations":
         result = generations(root, args.project_id, args.generation_id)
     elif args.command == "generate-local":
