@@ -271,9 +271,10 @@ fn create_r_environment_development(name: String) -> Result<serde_json::Value, S
 }
 
 #[tauri::command]
-fn install_r_environment_packages_development(name: String, packages: Vec<String>, repository: Option<String>) -> Result<serde_json::Value, String> {
+fn install_r_environment_packages_development(name: String, packages: Vec<String>, repository: Option<String>, channel: Option<String>) -> Result<serde_json::Value, String> {
     let mut arguments = vec!["install-r-packages".to_owned(), "--name".to_owned(), name];
     if let Some(repository) = repository { arguments.extend(["--repository".to_owned(), repository]); }
+    if let Some(channel) = channel { arguments.extend(["--channel".to_owned(), channel]); }
     for package in packages { arguments.extend(["--package".to_owned(), package]); }
     run_development_engine(&arguments)
 }

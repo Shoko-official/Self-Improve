@@ -581,6 +581,7 @@ def main() -> None:
     parser.add_argument("--name")
     parser.add_argument("--package", action="append")
     parser.add_argument("--repository", default="https://cloud.r-project.org")
+    parser.add_argument("--channel", default="cran")
     parser.add_argument("--project-id")
     parser.add_argument("--folder", type=Path)
     parser.add_argument("--folder-operation", choices=("read", "write"))
@@ -694,7 +695,7 @@ def main() -> None:
     elif args.command == "install-r-packages":
         if args.name is None or not args.package:
             parser.error("install-r-packages requires --name and one or more --package")
-        result = install_r_packages(root, args.name, args.package, args.repository)
+        result = install_r_packages(root, args.name, args.package, args.repository, args.channel)
     elif args.command == "projects":
         result = create_project(root, args.name, args.instructions or "") if args.name is not None else projects(root)
     elif args.command == "set-project-instructions":
