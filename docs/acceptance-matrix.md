@@ -18,6 +18,7 @@
 | Diagnostics | partially_verified | Stable codes, evidence/fact separation, confidence-bounded inferences, and redaction are covered by `engine/tests/test_diagnostics.py` |
 | Benchmark | partially_verified | Raw samples, required environment fingerprints, summary metrics, and comparison deltas are covered by `engine/tests/test_benchmarks.py` |
 | Automation | partially_verified | Durable definitions, dry-run history, and external-effect approval gates are covered by `engine/tests/test_automations.py` |
+| Operational UX | partially_verified | Durable lock-screen-safe notification records, deep links, and acknowledgement states are covered by `engine/tests/test_notifications.py` |
 | Remote providers | not_verifiable_here | No credential or provider configured |
 | OpenAI-compatible/NIM provider contracts | partially_verified | Real HTTP health, model discovery, streaming, and explicit egress-approval contracts are covered by `engine/tests/test_providers.py` |
 | Science parity | not_verifiable_here | Baseline matrix created |
