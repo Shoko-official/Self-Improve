@@ -114,6 +114,37 @@ def cancel_job(root: Path, job_id: str) -> dict[str, object]:
     return job
 
 
+def artifacts(root: Path, project_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        records = [dict(row) for row in store.connection.execute("SELECT id, name, media_type, session_id, created_at FROM artifacts WHERE project_id = ? ORDER BY created_at, id", (project_id,))]
+    finally:
+        store.close()
+    return {"project_id": project_id, "artifacts": records}
+
+
+def create_artifact(root: Path, project_id: str, name: str, media_type: str, content: str) -> dict[str, object]:
+    name = name.strip()
+    if not name or not media_type:
+        raise ValueError("Artifact name and media type are required.")
+    store = FrontierStore(root)
+    try:
+        artifact_id = store.create_artifact(project_id, name, media_type)
+        version = store.add_artifact_version(artifact_id, content.encode(), messages={"source": "frontierctl"}, execution_log={"state": "not_executed"})
+    finally:
+        store.close()
+    return {"id": artifact_id, "name": name, "version": version}
+
+
+def artifact_versions(root: Path, artifact_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        versions = store.artifact_versions(artifact_id)
+    finally:
+        store.close()
+    return {"artifact_id": artifact_id, "versions": versions}
+
+
 def export_data(root: Path, output: Path) -> dict[str, object]:
     root = root.resolve()
     output = output.resolve()
@@ -184,7 +215,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -197,6 +228,9 @@ def main() -> None:
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
     parser.add_argument("--job-id")
+    parser.add_argument("--artifact-id")
+    parser.add_argument("--media-type")
+    parser.add_argument("--content", default="")
     args = parser.parse_args()
     root = data_root()
     if args.command == "doctor":
@@ -228,6 +262,14 @@ def main() -> None:
         if args.job_id is None:
             parser.error("cancel-job requires --job-id")
         result = cancel_job(root, args.job_id)
+    elif args.command == "artifacts":
+        if args.project_id is None:
+            parser.error("artifacts requires --project-id")
+        result = create_artifact(root, args.project_id, args.name, args.media_type, args.content) if args.name is not None and args.media_type is not None else artifacts(root, args.project_id)
+    elif args.command == "artifact-versions":
+        if args.artifact_id is None:
+            parser.error("artifact-versions requires --artifact-id")
+        result = artifact_versions(root, args.artifact_id)
     elif args.command == "export":
         if args.output is None:
             parser.error("export requires --output PATH")
