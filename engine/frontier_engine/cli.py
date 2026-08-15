@@ -29,7 +29,8 @@ from frontier_engine.runtime_install import install_ollama_model as install_loca
 from frontier_engine.runtimes import stream_ollama
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
-from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer
+from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer, execute_s3_signed_transfer
+from frontier_engine.s3_signing import S3Credentials
 from frontier_engine.compute import ComputePlan, run_remote
 from frontier_engine.workspace_tools import ProjectWorkspaceTools
 from frontier_engine.reviewer import Claim, review_claims
@@ -577,7 +578,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -591,6 +592,11 @@ def main() -> None:
     parser.add_argument("--prefix")
     parser.add_argument("--object-key")
     parser.add_argument("--approved", action="store_true")
+    parser.add_argument("--s3-container")
+    parser.add_argument("--s3-region", default="us-east-1")
+    parser.add_argument("--s3-access-key-env", default="AWS_ACCESS_KEY_ID")
+    parser.add_argument("--s3-secret-key-env", default="AWS_SECRET_ACCESS_KEY")
+    parser.add_argument("--s3-session-token-env", default="AWS_SESSION_TOKEN")
     parser.add_argument("--compute-target", choices=("ssh", "slurm", "cloud"))
     parser.add_argument("--compute-endpoint")
     parser.add_argument("--compute-command", action="append")
@@ -726,6 +732,16 @@ def main() -> None:
             parser.error("storage-transfer requires --endpoint, --prefix, --object-key, and import/export/delete --operation")
         profile = StorageProfile("s3_compatible", args.endpoint, "local", args.prefix, "cli-explicit")
         result = execute_local_transfer(build_manifest(profile, args.object_key, args.content.encode(), args.operation), args.approved)
+    elif args.command == "s3-transfer":
+        if any(value is None for value in (args.endpoint, args.prefix, args.object_key, args.s3_container)) or args.operation not in {"import", "export", "delete"}:
+            parser.error("s3-transfer requires --endpoint, --s3-container, --prefix, --object-key, and import/export/delete --operation")
+        access_key = os.environ.get(args.s3_access_key_env, "")
+        secret_key = os.environ.get(args.s3_secret_key_env, "")
+        if not access_key or not secret_key:
+            parser.error("s3-transfer requires credentials in the named environment variables")
+        profile = StorageProfile("s3_compatible", args.endpoint, args.s3_container, args.prefix, "cli-environment")
+        credentials = S3Credentials(access_key, secret_key, os.environ.get(args.s3_session_token_env) or None)
+        result = execute_s3_signed_transfer(build_manifest(profile, args.object_key, args.content.encode(), args.operation), args.s3_region, credentials, args.approved)
     elif args.command == "remote-compute":
         if args.compute_target is None or not args.compute_command or args.compute_endpoint is None:
             parser.error("remote-compute requires --compute-target, --compute-endpoint, and one or more --compute-command")

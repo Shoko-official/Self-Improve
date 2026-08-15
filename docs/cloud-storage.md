@@ -14,4 +14,6 @@ Credential handles are names only, for example `cloud.primary -> FRONTIER_CLOUD_
 
 `execute_s3_signed_transfer` connects that signer to approved import/export/delete object requests. It enforces the profile prefix, HTTPS, approval, bounded timeout, and imported-byte checksum; authorization failures are returned as stable `FR-S3-TRANSFER-*` diagnostics without exposing credentials.
 
+`frontierctl s3-transfer` exposes the same adapter. It accepts environment variable names (`--s3-access-key-env`, `--s3-secret-key-env`, and optional `--s3-session-token-env`), never secret values on the command line, and requires `--approved` for export/delete.
+
 The local fixture adapter accepts a `file://` endpoint and executes approved export/delete or integrity-checked import operations atomically, without credentials or network access. The same boundary is available through `frontierctl storage-transfer` and the trusted desktop bridge. It is useful for deterministic tests of transfer state and checksums. It does not claim live S3, GCS, or Azure transfers.
