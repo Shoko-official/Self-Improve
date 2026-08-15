@@ -27,6 +27,27 @@ def status(root: Path) -> dict[str, object]:
     return {"data_root": str(root), "counts": counts}
 
 
+def projects(root: Path) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        records = [dict(row) for row in store.connection.execute("SELECT id, name, instructions, archived_at, created_at FROM projects ORDER BY created_at, id")]
+    finally:
+        store.close()
+    return {"projects": records}
+
+
+def create_project(root: Path, name: str) -> dict[str, object]:
+    name = name.strip()
+    if not name:
+        raise ValueError("Project name is required.")
+    store = FrontierStore(root)
+    try:
+        project_id = store.create_project(name)
+    finally:
+        store.close()
+    return {"id": project_id, "name": name}
+
+
 def export_data(root: Path, output: Path) -> dict[str, object]:
     root = root.resolve()
     output = output.resolve()
@@ -97,11 +118,12 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
     parser.add_argument("--destination", type=Path)
+    parser.add_argument("--name")
     args = parser.parse_args()
     root = data_root()
     if args.command == "doctor":
@@ -110,6 +132,8 @@ def main() -> None:
         result = status(root)
     elif args.command == "config":
         result = {"data_root": str(root), "environment_variable": "FRONTIER_DATA_DIR"}
+    elif args.command == "projects":
+        result = create_project(root, args.name) if args.name is not None else projects(root)
     elif args.command == "export":
         if args.output is None:
             parser.error("export requires --output PATH")

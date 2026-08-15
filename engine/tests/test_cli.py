@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from zipfile import ZipFile
 
-from frontier_engine.cli import data_root, export_data, import_data, status
+from frontier_engine.cli import create_project, data_root, export_data, import_data, projects, status
 from frontier_engine.store import FrontierStore
 
 
@@ -50,3 +50,12 @@ class CliTests(unittest.TestCase):
                 archive.writestr("../outside.txt", "not allowed")
             with self.assertRaisesRegex(ValueError, "unsafe path"):
                 import_data(archive_path, base / "destination")
+
+    def test_projects_can_be_listed_and_created(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            created = create_project(root, "Local research")
+            self.assertEqual(created["name"], "Local research")
+            self.assertEqual([record["name"] for record in projects(root)["projects"]], ["Local research"])
+            with self.assertRaisesRegex(ValueError, "required"):
+                create_project(root, "   ")
