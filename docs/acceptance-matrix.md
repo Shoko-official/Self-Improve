@@ -7,6 +7,7 @@
 | Hardware probe | partially_verified | Static OS, architecture, and core probe implemented |
 | Local text runtime | not_verifiable_here | No runtime pack installed |
 | Remote providers | not_verifiable_here | No credential or provider configured |
+| OpenAI-compatible/NIM provider contracts | partially_verified | Real HTTP health, model discovery, streaming, and explicit egress-approval contracts are covered by `engine/tests/test_providers.py` |
 | Science parity | not_verifiable_here | Baseline matrix created |
 | Windows package | not_verifiable_here | Tauri release build is blocked by the host application-control policy while executing a Rust build script: `os error 4551` |
 | Science projects | partially_verified | SQLite project/session lifecycle, intra-project forks, session state, and archive write protection are covered by `engine/tests/test_store.py` |
