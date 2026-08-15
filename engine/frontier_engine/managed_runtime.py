@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
+import urllib.error
+import urllib.request
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 
 @dataclass(frozen=True)
@@ -53,3 +58,39 @@ def verify_bundle(manifest_path: Path, bundle_root: Path, *, system: str | None 
     if digest != manifest.sha256:
         return {"valid": False, "code": "FR-BUNDLE-HASH-MISMATCH", "expected_sha256": manifest.sha256, "actual_sha256": digest}
     return {"valid": True, "runtime": manifest.runtime, "version": manifest.version, "protocol_version": manifest.protocol_version, "path": str(executable), "sha256": digest}
+
+
+def download_runtime_artifact(url: str, destination: Path, expected_sha256: str, approved: bool, max_bytes: int = 500 * 1024 * 1024, timeout_seconds: float = 120.0) -> dict[str, object]:
+    """Download one explicitly approved signed artifact without executing it."""
+    parsed = urlparse(url)
+    if parsed.scheme != "https" and parsed.hostname not in {"127.0.0.1", "localhost"}:
+        raise ValueError("FR-BUNDLE-DOWNLOAD-HTTPS: signed runtime downloads require HTTPS")
+    if not parsed.query:
+        raise ValueError("FR-BUNDLE-DOWNLOAD-SIGNED: a signed query URL is required")
+    if not approved:
+        raise PermissionError("FR-BUNDLE-DOWNLOAD-APPROVAL: runtime acquisition requires explicit approval")
+    if max_bytes <= 0 or timeout_seconds <= 0:
+        raise ValueError("FR-BUNDLE-DOWNLOAD-LIMIT: limits must be positive")
+    if len(expected_sha256) != 64 or any(char not in "0123456789abcdef" for char in expected_sha256):
+        raise ValueError("FR-BUNDLE-DOWNLOAD-HASH: expected SHA-256 is invalid")
+    destination = destination.resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+    total = 0
+    digest = hashlib.sha256()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, method="GET"), timeout=timeout_seconds) as response, temporary.open("wb") as stream:
+            while chunk := response.read(1024 * 1024):
+                total += len(chunk)
+                if total > max_bytes:
+                    raise ValueError("FR-BUNDLE-DOWNLOAD-TOO-LARGE")
+                digest.update(chunk); stream.write(chunk)
+        actual = digest.hexdigest()
+        if actual != expected_sha256:
+            raise ValueError("FR-BUNDLE-DOWNLOAD-HASH-MISMATCH")
+        os.replace(temporary, destination)
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise ValueError(f"FR-BUNDLE-DOWNLOAD-NETWORK:{error}") from error
+    finally:
+        if temporary.exists(): temporary.unlink()
+    return {"state": "downloaded", "path": str(destination), "bytes": total, "sha256": expected_sha256, "executed": False}
