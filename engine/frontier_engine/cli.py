@@ -87,6 +87,33 @@ def archive_project(root: Path, project_id: str) -> dict[str, object]:
     return {"id": project_id, "archived": True}
 
 
+def jobs(root: Path) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        records = [dict(row) for row in store.connection.execute("SELECT id, project_id, session_id, operation, state, created_at, started_at, completed_at FROM jobs ORDER BY created_at DESC, id DESC")]
+    finally:
+        store.close()
+    return {"jobs": records}
+
+
+def enqueue_job(root: Path, project_id: str, operation: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        job_id = store.create_job(project_id, operation, {})
+    finally:
+        store.close()
+    return {"id": job_id, "project_id": project_id, "operation": operation, "state": "queued"}
+
+
+def cancel_job(root: Path, job_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        job = store.request_cancellation(job_id)
+    finally:
+        store.close()
+    return job
+
+
 def export_data(root: Path, output: Path) -> dict[str, object]:
     root = root.resolve()
     output = output.resolve()
@@ -157,7 +184,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "sessions", "star-session", "archive-project", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -168,6 +195,8 @@ def main() -> None:
     parser.add_argument("--title")
     parser.add_argument("--parent-session-id")
     parser.add_argument("--starred", choices=("true", "false"))
+    parser.add_argument("--operation")
+    parser.add_argument("--job-id")
     args = parser.parse_args()
     root = data_root()
     if args.command == "doctor":
@@ -190,6 +219,15 @@ def main() -> None:
         if args.project_id is None:
             parser.error("archive-project requires --project-id")
         result = archive_project(root, args.project_id)
+    elif args.command == "jobs":
+        if args.project_id is None or args.operation is None:
+            result = jobs(root)
+        else:
+            result = enqueue_job(root, args.project_id, args.operation)
+    elif args.command == "cancel-job":
+        if args.job_id is None:
+            parser.error("cancel-job requires --job-id")
+        result = cancel_job(root, args.job_id)
     elif args.command == "export":
         if args.output is None:
             parser.error("export requires --output PATH")
