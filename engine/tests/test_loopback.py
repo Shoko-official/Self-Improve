@@ -90,11 +90,13 @@ class LoopbackTests(unittest.TestCase):
             try:
                 first = self._rpc(service, {"jsonrpc": "2.0", "id": 6, "method": "kernel.execute", "params": {"project_id": project_id, "code": "sample_size = 41"}})
                 second = self._rpc(service, {"jsonrpc": "2.0", "id": 7, "method": "kernel.execute", "params": {"project_id": project_id, "code": "print(sample_size + 1)"}})
-                self.assertEqual(first["result"]["state"], "succeeded")
-                self.assertEqual(second["result"]["stdout"], "42\n")
+                self.assertEqual(first["result"]["execution"]["state"], "succeeded")
+                self.assertEqual(first["result"]["job"]["state"], "succeeded")
+                self.assertEqual([event["kind"] for event in first["result"]["job"]["events"]], ["kernel.started", "kernel.succeeded"])
+                self.assertEqual(second["result"]["execution"]["stdout"], "42\n")
                 self.assertEqual(self._rpc(service, {"jsonrpc": "2.0", "id": 8, "method": "kernel.restart", "params": {"project_id": project_id}})["result"]["state"], "running")
                 cleared = self._rpc(service, {"jsonrpc": "2.0", "id": 9, "method": "kernel.execute", "params": {"project_id": project_id, "code": "print('sample_size' in globals())"}})
-                self.assertEqual(cleared["result"]["stdout"], "False\n")
+                self.assertEqual(cleared["result"]["execution"]["stdout"], "False\n")
             finally: service.close()
 
     def test_rpc_project_kernel_rejects_an_archived_project(self) -> None:
@@ -104,6 +106,18 @@ class LoopbackTests(unittest.TestCase):
             try:
                 response = self._rpc(service, {"jsonrpc": "2.0", "id": 10, "method": "kernel.execute", "params": {"project_id": project_id, "code": "print('blocked')"}})
                 self.assertEqual(response["error"]["code"], -32602)
+            finally: service.close()
+
+    def test_rpc_project_kernel_persists_a_failed_execution_job(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); store = FrontierStore(root); project_id = store.create_project("Failure"); store.close()
+            service = LoopbackService(data_root=root); service.start()
+            try:
+                response = self._rpc(service, {"jsonrpc": "2.0", "id": 11, "method": "kernel.execute", "params": {"project_id": project_id, "code": "raise ValueError('bad input')"}})
+                self.assertEqual(response["result"]["execution"]["state"], "failed")
+                self.assertEqual(response["result"]["job"]["state"], "failed")
+                self.assertEqual(response["result"]["job"]["diagnostic"]["code"], "FR-KERNEL-EXECUTION-FAILED")
+                self.assertEqual([event["kind"] for event in response["result"]["job"]["events"]], ["kernel.started", "kernel.failed"])
             finally: service.close()
 
     def _rpc(self, service: LoopbackService, body: dict[str, object]) -> dict[str, object]:
