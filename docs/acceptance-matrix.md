@@ -9,7 +9,7 @@
 | Hardware probe | partially_verified | Static OS, architecture, and core probe implemented |
 | Local text runtime | not_verifiable_here | No runtime pack installed |
 | Hugging Face model registry | partially_verified | Explicit public-index search and selected-file download use bounded queries, atomic writes, SHA-256 verification, and post-transfer local registration in `engine/tests/test_model_registry.py`; a downloaded file remains runtime-unvalidated |
-| Runtime packs | partially_verified | Versioned manifest validation, operation checks, and truthful local Ollama availability probes are covered by `engine/tests/test_runtimes.py` |
+| Runtime packs | partially_verified | Versioned runtime-pack contracts and managed bundle platform/path/SHA-256 verification are covered by `engine/tests/test_runtimes.py` and `engine/tests/test_managed_runtime.py`; no managed artifact is shipped yet |
 | Permissions | partially_verified | Exact resource/operation grants, one-time consumption, and revocation enforcement are covered by `engine/tests/test_permissions.py` |
 | Python/R kernels | partially_verified | Persistent Python namespace, restart clearing, failed execution records, and honest R capability probing are covered by `engine/tests/test_kernels.py` |
 | Local project shell | partially_verified | Exact argument-vector execution requires a project working-directory write grant and records durable success, exit, timeout, and denial states in `engine/tests/test_shell.py`; it is not presented as an OS sandbox |
