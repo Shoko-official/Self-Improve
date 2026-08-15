@@ -12,6 +12,7 @@
 | Runtime packs | partially_verified | Versioned manifest validation, operation checks, and truthful local Ollama availability probes are covered by `engine/tests/test_runtimes.py` |
 | Permissions | partially_verified | Exact resource/operation grants, one-time consumption, and revocation enforcement are covered by `engine/tests/test_permissions.py` |
 | Python/R kernels | partially_verified | Persistent Python namespace, restart clearing, failed execution records, and honest R capability probing are covered by `engine/tests/test_kernels.py` |
+| Local project shell | partially_verified | Exact argument-vector execution requires a project working-directory write grant and records durable success, exit, timeout, and denial states in `engine/tests/test_shell.py`; it is not presented as an OS sandbox |
 | Reviewer | partially_verified | Evidence-gap findings for source, computed, and inference claims are covered by `engine/tests/test_reviewer.py`; no rerun claim is made |
 | Annotations | partially_verified | Exact artifact-version targets, selectors, batch consumption, and no-retarget behavior are covered by `engine/tests/test_annotations.py` |
 | Science remote compute | partially_verified | Local subprocess fixture and approval-gated remote plan contracts are covered by `engine/tests/test_compute.py`; no live remote host is claimed |

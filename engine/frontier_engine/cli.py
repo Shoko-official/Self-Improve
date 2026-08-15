@@ -23,6 +23,7 @@ from frontier_engine.model_registry import HuggingFaceHub, ModelRegistry
 from frontier_engine.environments import list_manifests, probe_environment
 from frontier_engine.generation import run_generation
 from frontier_engine.runtimes import stream_ollama
+from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 
 
@@ -299,6 +300,14 @@ def download_huggingface_model(root: Path, repository_id: str, filename: str, de
         registry.close()
 
 
+def execute_shell(root: Path, project_id: str, working_directory: Path, command: list[str], timeout_seconds: float) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        return execute_project_shell(store, project_id, working_directory, command, timeout_seconds)
+    finally:
+        store.close()
+
+
 def artifacts(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -440,7 +449,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "generations", "generate-local", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "shell-exec", "generations", "generate-local", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -457,6 +466,9 @@ def main() -> None:
     parser.add_argument("--reasoning-effort", choices=("compact", "standard", "extended"), default="standard")
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
+    parser.add_argument("--working-directory", type=Path)
+    parser.add_argument("--shell-arg", action="append")
+    parser.add_argument("--timeout-seconds", type=float, default=30)
     parser.add_argument("--job-id")
     parser.add_argument("--generation-id")
     parser.add_argument("--runtime")
@@ -576,6 +588,10 @@ def main() -> None:
         if args.job_id is None:
             parser.error("cancel-job requires --job-id")
         result = cancel_job(root, args.job_id)
+    elif args.command == "shell-exec":
+        if args.project_id is None or args.working_directory is None or args.shell_arg is None:
+            parser.error("shell-exec requires --project-id, --working-directory, and one or more --shell-arg values")
+        result = execute_shell(root, args.project_id, args.working_directory, args.shell_arg, args.timeout_seconds)
     elif args.command == "generations":
         result = generations(root, args.project_id, args.generation_id)
     elif args.command == "generate-local":

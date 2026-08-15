@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, export_data, generate_local, generations, grant_project_folder, import_data, jobs, project_folders, projects, revoke_project_folder, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
+from frontier_engine.cli import archive_project, artifact_versions, artifacts, cancel_job, claims, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, jobs, project_folders, projects, revoke_project_folder, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status
 from frontier_engine.store import FrontierStore
 
 
@@ -117,6 +117,14 @@ class CliTests(unittest.TestCase):
         with patch("frontier_engine.cli.HuggingFaceHub") as hub_type:
             hub_type.return_value.search_models.return_value = [{"modelId": "org/model"}]
             self.assertEqual(search_huggingface_models("model")["models"][0]["modelId"], "org/model")
+
+    def test_shell_command_requires_existing_project_folder_grant(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "state"; workspace = Path(directory) / "workspace"; workspace.mkdir()
+            project_id = create_project(root, "Shell")["id"]
+            grant_project_folder(root, project_id, workspace, "write")
+            result = execute_shell(root, project_id, workspace, [sys.executable, "-c", "print('shell')"], 5)
+            self.assertEqual(result["result"]["stdout"], "shell\n")
 
     def test_artifacts_keep_versions_and_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
