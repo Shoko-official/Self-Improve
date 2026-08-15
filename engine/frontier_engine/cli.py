@@ -6,12 +6,14 @@ import argparse
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from frontier_engine.__main__ import doctor
 from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
+from frontier_engine.loopback import LoopbackService
 from frontier_engine.environments import list_manifests, probe_environment
 from frontier_engine.store import FrontierStore
 
@@ -251,7 +253,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "environments", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "environments", "projects", "sessions", "star-session", "archive-project", "jobs", "cancel-job", "artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -277,6 +279,7 @@ def main() -> None:
     parser.add_argument("--claim-status", choices=("draft", "supported", "disputed", "retracted"))
     parser.add_argument("--evidence", action="append", nargs=2, metavar=("URI", "SELECTOR"))
     parser.add_argument("--language", choices=("python", "r"))
+    parser.add_argument("--duration-seconds", type=float)
     args = parser.parse_args()
     root = data_root()
     if args.command == "doctor":
@@ -285,6 +288,20 @@ def main() -> None:
         result = status(root)
     elif args.command == "config":
         result = {"data_root": str(root), "environment_variable": "FRONTIER_DATA_DIR"}
+    elif args.command == "serve":
+        if args.duration_seconds is not None and args.duration_seconds < 0:
+            parser.error("serve --duration-seconds must be non-negative")
+        service = LoopbackService()
+        service.start()
+        result = {"url": service.url, "status_path": "/status", "authorization": "Bearer", "token": service.token}
+        print(json.dumps(result, sort_keys=True) if args.json else json.dumps(result, indent=2, sort_keys=True))
+        try:
+            threading.Event().wait(args.duration_seconds)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            service.close()
+        return
     elif args.command == "environments":
         result = {"manifests": list_manifests(root), "probe": probe_environment(args.language or "python")}
     elif args.command == "projects":

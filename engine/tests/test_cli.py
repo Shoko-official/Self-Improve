@@ -1,4 +1,7 @@
 import os
+import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -98,3 +101,12 @@ class CliTests(unittest.TestCase):
             record = claims(root)["claims"][0]
             self.assertEqual(record["status"], "supported")
             self.assertEqual(record["evidence"][0]["evidence_uri"], "artifact://benchmark")
+
+    def test_serve_prints_an_ephemeral_loopback_descriptor(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            environment = {**os.environ, "FRONTIER_DATA_DIR": temp_dir}
+            result = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "serve", "--duration-seconds", "0", "--json"], capture_output=True, check=True, env=environment, text=True)
+            descriptor = json.loads(result.stdout)
+            self.assertTrue(descriptor["url"].startswith("http://127.0.0.1:"))
+            self.assertEqual(descriptor["status_path"], "/status")
+            self.assertTrue(descriptor["token"])
