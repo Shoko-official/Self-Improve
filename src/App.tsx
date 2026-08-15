@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState, type FormEvent } from "react";
-import { translate, type Language } from "./i18n";
+import { surfaceText, translate, type Language } from "./i18n";
 
 type CapabilityReport = { operatingSystem: string; architecture: string; logicalCores: number; capturedAt: number; };
 type EngineDoctorReport = { checked_at: string; host: { logical_cores: number; machine: string; release: string; system: string; }; limits: string[]; protocol_version: number; status: string; };
@@ -28,6 +28,7 @@ const surfaces: Array<{ id: Surface; label: "workspaces" | "models" | "agent" | 
 export function App() {
   const [surface, setSurface] = useState<Surface>("workspaces");
   const [language, setLanguage] = useState<Language>(() => localStorage.getItem("frontier-language") === "fr" ? "fr" : "en");
+  useEffect(() => { document.title = `Frontier · ${surfaceText(language, "projectLedger")}`; }, [language]);
   const [report, setReport] = useState<CapabilityReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [engineReport, setEngineReport] = useState<EngineDoctorReport | null>(null);
