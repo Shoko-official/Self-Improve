@@ -120,13 +120,13 @@ fn local_generations_development(project_id: Option<String>) -> Result<serde_jso
 }
 
 #[tauri::command]
-fn kernel_execute_development(project_id: String, code: String) -> Result<serde_json::Value, String> {
-    kernel_request(json!({"jsonrpc":"2.0","id":1,"method":"kernel.execute","params":{"project_id":project_id,"code":code}}))
+fn kernel_execute_development(project_id: String, code: String, language: Option<String>) -> Result<serde_json::Value, String> {
+    kernel_request(json!({"jsonrpc":"2.0","id":1,"method":"kernel.execute","params":{"project_id":project_id,"code":code,"language":language.unwrap_or_else(|| "python".to_owned())}}))
 }
 
 #[tauri::command]
-fn kernel_restart_development(project_id: String) -> Result<serde_json::Value, String> {
-    kernel_request(json!({"jsonrpc":"2.0","id":1,"method":"kernel.restart","params":{"project_id":project_id}}))
+fn kernel_restart_development(project_id: String, language: Option<String>) -> Result<serde_json::Value, String> {
+    kernel_request(json!({"jsonrpc":"2.0","id":1,"method":"kernel.restart","params":{"project_id":project_id,"language":language.unwrap_or_else(|| "python".to_owned())}}))
 }
 
 fn kernel_request(request: serde_json::Value) -> Result<serde_json::Value, String> {

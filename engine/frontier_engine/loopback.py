@@ -12,7 +12,7 @@ from typing import Any
 from frontier_engine.__main__ import doctor
 from frontier_engine.agent_runner import run_local_agent
 from frontier_engine.agent_state import AgentStateStore
-from frontier_engine.kernels import PythonKernel
+from frontier_engine.kernels import PythonKernel, RKernel
 from frontier_engine.runtime_install import install_ollama_model
 from frontier_engine.runtimes import probe_ollama
 from frontier_engine.store import FrontierStore
@@ -22,7 +22,7 @@ class LoopbackService:
     def __init__(self, port: int = 0, data_root: Path | None = None) -> None:
         self.token = secrets.token_urlsafe(32)
         self.data_root = data_root
-        self._kernels: dict[str, PythonKernel] = {}
+        self._kernels: dict[tuple[str, str], PythonKernel | RKernel] = {}
         self._kernel_lock = threading.Lock()
         self._server = ThreadingHTTPServer(("127.0.0.1", port), self._handler())
         self._thread: threading.Thread | None = None
@@ -76,18 +76,19 @@ class LoopbackService:
             project_id = _required_string(params, "project_id")
             self._require_active_project(project_id)
             code = _required_string(params, "code")
+            language = _kernel_language(params)
             store = FrontierStore(self.data_root)
             try:
                 job_id = store.create_job(project_id, "kernel.execute", {"code": code})
                 store.claim_job(job_id)
-                store.append_job_event(job_id, "kernel.started", {"kernel_state": self._kernel(project_id).state})
+                store.append_job_event(job_id, "kernel.started", {"kernel_state": self._kernel(project_id, language).state, "language": language})
                 try:
-                    result = self._kernel(project_id).execute(code)
+                    result = self._kernel(project_id, language).execute(code)
                 except RuntimeError as error:
                     execution = {"state": "failed", "error": str(error), "stdout": "", "stderr": ""}
                     store.append_job_event(job_id, "kernel.failed", execution)
                     job = store.fail_job(job_id, {"code": "FR-KERNEL-EXECUTION-FAILED", "detail": str(error)})
-                    return {"project_id": project_id, "execution": execution, "job": job}
+                    return {"project_id": project_id, "language": language, "execution": execution, "job": job}
                 execution = result.__dict__
                 if result.state == "succeeded":
                     store.append_job_event(job_id, "kernel.succeeded", execution)
@@ -95,17 +96,19 @@ class LoopbackService:
                 else:
                     store.append_job_event(job_id, "kernel.failed", execution)
                     job = store.fail_job(job_id, {"code": "FR-KERNEL-EXECUTION-FAILED", "detail": result.error or "Kernel execution failed."})
-                return {"project_id": project_id, "execution": execution, "job": job}
+                return {"project_id": project_id, "language": language, "execution": execution, "job": job}
             finally: store.close()
         if method == "kernel.restart":
             project_id = _required_string(params, "project_id")
             self._require_active_project(project_id)
-            kernel = self._kernel(project_id); kernel.restart()
-            return {"project_id": project_id, "state": kernel.state}
+            language = _kernel_language(params)
+            kernel = self._kernel(project_id, language); kernel.restart()
+            return {"project_id": project_id, "language": language, "state": kernel.state}
         if method == "kernel.status":
             project_id = _required_string(params, "project_id")
             self._require_active_project(project_id)
-            return {"project_id": project_id, "state": self._kernels[project_id].state if project_id in self._kernels else "stopped"}
+            language = _kernel_language(params)
+            return {"project_id": project_id, "language": language, "state": self._kernels[(project_id, language)].state if (project_id, language) in self._kernels else "stopped"}
         if method == "agent.run":
             store = FrontierStore(self.data_root)
             try: store.require_active_project(_required_string(params, "project_id"))
@@ -121,9 +124,10 @@ class LoopbackService:
         try: store.require_active_project(project_id)
         finally: store.close()
 
-    def _kernel(self, project_id: str) -> PythonKernel:
+    def _kernel(self, project_id: str, language: str) -> PythonKernel | RKernel:
         with self._kernel_lock:
-            return self._kernels.setdefault(project_id, PythonKernel())
+            factory = RKernel if language == "r" else PythonKernel
+            return self._kernels.setdefault((project_id, language), factory())
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:
         token = self.token; service = self
@@ -149,6 +153,12 @@ def _required_string(params: dict[str, Any], key: str) -> str:
     value = params.get(key)
     if not isinstance(value, str) or not value.strip(): raise ValueError(f"{key} is required.")
     return value.strip()
+
+
+def _kernel_language(params: dict[str, Any]) -> str:
+    language = params.get("language", "python")
+    if not isinstance(language, str) or language.strip().lower() not in {"python", "r"}: raise ValueError("language must be python or r.")
+    return language.strip().lower()
 
 
 def _rpc_error(request_id: object, code: int, message: str) -> dict[str, object]:

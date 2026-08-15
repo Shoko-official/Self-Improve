@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from frontier_engine.kernels import PythonKernel, probe_r
+from frontier_engine.kernels import PythonKernel, RKernel, probe_r
 
 
 class KernelTests(unittest.TestCase):
@@ -27,3 +27,7 @@ class KernelTests(unittest.TestCase):
     def test_r_probe_reports_missing_runtime(self) -> None:
         with patch("frontier_engine.kernels.shutil.which", return_value=None):
             self.assertEqual(probe_r()["reason"], "FR-KERNEL-R-NOT-FOUND")
+
+    def test_r_kernel_reports_missing_runtime_without_fallback(self) -> None:
+        with patch("frontier_engine.kernels.shutil.which", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "FR-KERNEL-R-NOT-FOUND"): RKernel().execute("print(1)")
