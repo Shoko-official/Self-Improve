@@ -1,0 +1,9 @@
+{
+  "id": "ollama",
+  "version": "1",
+  "protocol_version": 1,
+  "modalities": ["text", "embeddings"],
+  "operations": ["probe", "generate", "stream", "cancel", "health"],
+  "formats": ["ollama"],
+  "health_command": ["ollama", "list"]
+}
