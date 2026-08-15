@@ -8,4 +8,6 @@ Profiles define a storage type, endpoint, exact container, prefix, and a credent
 
 `list_presigned_objects` adds bounded read-only listing through a signed query URL. It accepts common S3/GCS/Azure-compatible JSON or XML listings, filters to the granted prefix, normalizes key/size/etag metadata, and requires explicit approval. It does not claim provider SDK authentication or pagination beyond the supplied signed response.
 
+Credential handles are names only, for example `cloud.primary -> FRONTIER_CLOUD_PRIMARY`. Frontier reports availability without revealing values and resolves the environment-backed value only at the execution boundary. Missing handles fail with `FR-CREDENTIAL-MISSING`; values are never placed in manifests, policy files, logs, or diagnostics.
+
 The local fixture adapter accepts a `file://` endpoint and executes approved export/delete or integrity-checked import operations atomically, without credentials or network access. The same boundary is available through `frontierctl storage-transfer` and the trusted desktop bridge. It is useful for deterministic tests of transfer state and checksums. It does not claim live S3, GCS, or Azure transfers.
