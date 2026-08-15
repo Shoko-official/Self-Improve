@@ -104,6 +104,21 @@ fn local_generations_development(project_id: Option<String>) -> Result<serde_jso
 }
 
 #[tauri::command]
+fn search_huggingface_models_development(query: String, limit: Option<u8>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["model-search".to_owned(), "--query".to_owned(), query];
+    if let Some(limit) = limit { arguments.extend(["--limit".to_owned(), limit.to_string()]); }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn download_huggingface_model_development(repository_id: String, filename: String, destination: String, revision: Option<String>, expected_sha256: Option<String>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["model-download".to_owned(), "--repository-id".to_owned(), repository_id, "--filename".to_owned(), filename, "--destination".to_owned(), destination];
+    if let Some(revision) = revision { arguments.extend(["--revision".to_owned(), revision]); }
+    if let Some(expected_sha256) = expected_sha256 { arguments.extend(["--expected-sha256".to_owned(), expected_sha256]); }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
 fn project_artifacts_development(project_id: String) -> Result<serde_json::Value, String> {
     run_development_engine(&["artifacts".to_owned(), "--project-id".to_owned(), project_id])
 }
@@ -196,7 +211,7 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, local_generations_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, search_project_artifacts_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development])
+        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, local_generations_development, search_huggingface_models_development, download_huggingface_model_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, search_project_artifacts_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
 }
