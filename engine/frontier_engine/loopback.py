@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Any
 
 from frontier_engine.__main__ import doctor
+from frontier_engine.agent_runner import run_local_agent
+from frontier_engine.agent_state import AgentStateStore
 from frontier_engine.runtime_install import install_ollama_model
 from frontier_engine.runtimes import probe_ollama
 from frontier_engine.store import FrontierStore
@@ -64,6 +66,10 @@ class LoopbackService:
             store = FrontierStore(self.data_root)
             try: return store.retry_job(_required_string(params, "job_id"))
             finally: store.close()
+        if method == "agent.run":
+            state = AgentStateStore(self.data_root / "agent.sqlite3")
+            try: return run_local_agent(state, _required_string(params, "project_id"), _required_string(params, "model"), _required_string(params, "prompt"))
+            finally: state.close()
         raise RuntimeError("FR-RPC-METHOD-NOT-FOUND")
 
     def _handler(self) -> type[BaseHTTPRequestHandler]:

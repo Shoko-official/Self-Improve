@@ -17,6 +17,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from frontier_engine.__main__ import doctor
 from frontier_engine.agent_state import AgentStateStore
+from frontier_engine.agent_runner import run_local_agent
 from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
@@ -340,6 +341,12 @@ def workspace_tool(root: Path, project_id: str, workspace: Path, action: str, re
         agent.close(); store.close()
 
 
+def run_agent(root: Path, project_id: str, model: str, prompt: str) -> dict[str, object]:
+    state = AgentStateStore(root / "agent.sqlite3")
+    try: return run_local_agent(state, project_id, model, prompt)
+    finally: state.close()
+
+
 def artifacts(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -481,7 +488,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "url", "service-status", "logs", "stop", "environments", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -636,6 +643,10 @@ def main() -> None:
         if args.project_id is None or args.workspace is None or args.workspace_action is None:
             parser.error("agent-workspace requires --project-id, --workspace, and --workspace-action")
         result = workspace_tool(root, args.project_id, args.workspace, args.workspace_action, args.path, args.text)
+    elif args.command == "agent-run":
+        if args.project_id is None or args.model is None or args.prompt is None:
+            parser.error("agent-run requires --project-id, --model, and --prompt")
+        result = run_agent(root, args.project_id, args.model, args.prompt)
     elif args.command == "generations":
         result = generations(root, args.project_id, args.generation_id)
     elif args.command == "generate-local":
