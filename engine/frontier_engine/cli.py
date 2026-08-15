@@ -30,6 +30,7 @@ from frontier_engine.runtimes import stream_ollama
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer
+from frontier_engine.compute import ComputePlan, run_remote
 from frontier_engine.workspace_tools import ProjectWorkspaceTools
 from frontier_engine.reviewer import Claim, review_claims
 from frontier_engine.renderers import render_preview
@@ -575,7 +576,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "remote-compute", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -589,6 +590,16 @@ def main() -> None:
     parser.add_argument("--prefix")
     parser.add_argument("--object-key")
     parser.add_argument("--approved", action="store_true")
+    parser.add_argument("--compute-target", choices=("ssh", "slurm", "cloud"))
+    parser.add_argument("--compute-endpoint")
+    parser.add_argument("--compute-command", action="append")
+    parser.add_argument("--compute-cpu", type=int, default=1)
+    parser.add_argument("--compute-memory-mb", type=int, default=1024)
+    parser.add_argument("--compute-timeout", type=int, default=300)
+    parser.add_argument("--compute-cost", type=float, default=0)
+    parser.add_argument("--compute-egress", type=int, default=0)
+    parser.add_argument("--compute-working-directory")
+    parser.add_argument("--compute-approved", action="store_true")
     parser.add_argument("--project-id")
     parser.add_argument("--folder", type=Path)
     parser.add_argument("--folder-operation", choices=("read", "write"))
@@ -712,6 +723,11 @@ def main() -> None:
             parser.error("storage-transfer requires --endpoint, --prefix, --object-key, and import/export/delete --operation")
         profile = StorageProfile("s3_compatible", args.endpoint, "local", args.prefix, "cli-explicit")
         result = execute_local_transfer(build_manifest(profile, args.object_key, args.content.encode(), args.operation), args.approved)
+    elif args.command == "remote-compute":
+        if args.compute_target is None or not args.compute_command or args.compute_endpoint is None:
+            parser.error("remote-compute requires --compute-target, --compute-endpoint, and one or more --compute-command")
+        plan = ComputePlan(args.compute_target, tuple(args.compute_command), args.compute_cpu, args.compute_memory_mb, args.compute_timeout, args.compute_cost, args.compute_egress, args.compute_endpoint, args.compute_working_directory)
+        result = run_remote(plan, args.compute_approved)
     elif args.command == "projects":
         result = create_project(root, args.name, args.instructions or "") if args.name is not None else projects(root)
     elif args.command == "set-project-instructions":
