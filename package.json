@@ -1,5 +1,5 @@
 {
-  "name": "frontier",
+  "name": "shokos-llm",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -13,8 +13,11 @@
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-opener": "^2.0.0",
+    "lucide-react": "^1.31.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",

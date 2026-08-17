@@ -14,8 +14,14 @@ SKILLS = (
     {"id": "reproducible-kernel", "capabilities": ["kernel.python", "kernel.r", "environment.fingerprint"], "network": "none", "availability": "local-engine"},
 )
 
+# Extensions remain absent until the desktop can both validate and execute them.
+EXTENSIONS: tuple[dict[str, object], ...] = ()
+
 
 def connector_catalog() -> list[dict[str, object]]: return [dict(item) for item in CONNECTORS]
 
 
 def skill_catalog() -> list[dict[str, object]]: return [dict(item) for item in SKILLS]
+
+
+def extension_catalog() -> list[dict[str, object]]: return [dict(item) for item in EXTENSIONS]
