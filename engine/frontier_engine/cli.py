@@ -31,6 +31,7 @@ from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer, execute_s3_signed_transfer
 from frontier_engine.s3_signing import S3Credentials
+from frontier_engine.scientific_registry import connector_catalog, extension_catalog, skill_catalog
 from frontier_engine.compute import ComputePlan, run_remote
 from frontier_engine.workspace_tools import ProjectWorkspaceTools
 from frontier_engine.reviewer import Claim, review_claims
@@ -578,7 +579,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -881,6 +882,12 @@ def main() -> None:
         if args.claim_id is None or args.claim_status is None:
             parser.error("set-claim-status requires --claim-id and --claim-status")
         result = set_claim_status(root, args.claim_id, args.claim_status)
+    elif args.command == "connectors":
+        result = {"connectors": connector_catalog()}
+    elif args.command == "skills":
+        result = {"skills": skill_catalog()}
+    elif args.command == "extensions":
+        result = {"extensions": extension_catalog()}
     elif args.command == "export":
         if args.output is None:
             parser.error("export requires --output PATH")

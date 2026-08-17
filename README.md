@@ -1,6 +1,6 @@
-# Frontier
+# Shoko's LLM
 
-Frontier is a local-first desktop AI and scientific workbench. This repository currently contains the initial trust-boundary slice: a Tauri desktop shell, native host-capability reporting, and a dependency-free local-engine doctor protocol.
+Shoko's LLM is a local-first desktop AI and scientific workbench. Its internal Frontier engine provides the Tauri desktop shell with native host-capability reporting and a dependency-free local engine protocol.
 
 ## Development
 

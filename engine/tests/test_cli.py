@@ -135,6 +135,16 @@ class CliTests(unittest.TestCase):
             hub_type.return_value.search_models.return_value = [{"modelId": "org/model"}]
             self.assertEqual(search_huggingface_models("model")["models"][0]["modelId"], "org/model")
 
+    def test_connector_and_skill_catalogs_are_available_to_desktop_clients(self) -> None:
+        connectors = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "connectors", "--json"], capture_output=True, check=True, text=True)
+        skills = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "skills", "--json"], capture_output=True, check=True, text=True)
+        self.assertTrue(json.loads(connectors.stdout)["connectors"])
+        self.assertTrue(json.loads(skills.stdout)["skills"])
+
+    def test_extension_catalog_hides_unexecutable_extensions(self) -> None:
+        extensions = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "extensions", "--json"], capture_output=True, check=True, text=True)
+        self.assertEqual(json.loads(extensions.stdout), {"extensions": []})
+
     def test_create_environment_command_creates_a_real_local_python_environment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "create-environment", "--name", "analysis", "--data-dir", directory, "--json"], capture_output=True, check=True, text=True)

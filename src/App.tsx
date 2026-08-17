@@ -1,6 +1,36 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState, type FormEvent } from "react";
-import { surfaceText, translate, type Language } from "./i18n";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import {
+  Bot,
+  Boxes,
+  Cable,
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  Code2,
+  Command,
+  Cpu,
+  FileStack,
+  FlaskConical,
+  FolderKanban,
+  Library,
+  MessageSquare,
+  Moon,
+  PanelLeftOpen,
+  PanelRightOpen,
+  Plus,
+  Puzzle,
+  RefreshCw,
+  Send,
+  Settings,
+  ShieldCheck,
+  Sun,
+  TerminalSquare,
+  type LucideIcon,
+} from "lucide-react";
+import { surfaceText, type Language } from "./i18n";
 
 type CapabilityReport = { operatingSystem: string; architecture: string; logicalCores: number; capturedAt: number; };
 type EngineDoctorReport = { checked_at: string; host: { logical_cores: number; machine: string; release: string; system: string; }; limits: string[]; protocol_version: number; status: string; };
@@ -15,34 +45,565 @@ type ArtifactRecord = { id: string; name: string; media_type: string; created_at
 type EnvironmentRecord = { name: string; language: string; executable: string | null; python_version: string | null; package_fingerprint: string | null; packages: Record<string, string>; };
 type AgentActivity = { project_id: string; plan: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string }; result: { error?: string; output_chars?: number } }>; };
 type KernelResult = { project_id: string; execution: { state: string; stdout: string; stderr: string; error?: string }; job: { id: string; state: string; diagnostic: { code: string } | null; events: Array<{ kind: string; created_at: string }> } };
-type Surface = "workspaces" | "models" | "agent" | "kernel" | "science" | "artifacts" | "compute" | "settings";
+type Surface = "chat" | "workspaces" | "models" | "science" | "artifacts" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
+type Theme = "light" | "dark";
+type NavigationItem = { id: Surface; icon: LucideIcon; en: string; fr: string };
 
-const surfaces: Array<{ id: Surface; label: "workspaces" | "models" | "agent" | "kernel" | "science" | "artifacts" | "compute" | "settings"; caption: "workspacesCaption" | "modelsCaption" | "agentCaption" | "kernelCaption" | "scienceCaption" | "artifactsCaption" | "computeCaption" | "settingsCaption" }> = [
-  { id: "workspaces", label: "workspaces", caption: "workspacesCaption" }, { id: "models", label: "models", caption: "modelsCaption" },
-  { id: "agent", label: "agent", caption: "agentCaption" },
-  { id: "kernel", label: "kernel", caption: "kernelCaption" },
-  { id: "science", label: "science", caption: "scienceCaption" }, { id: "artifacts", label: "artifacts", caption: "artifactsCaption" },
-  { id: "compute", label: "compute", caption: "computeCaption" }, { id: "settings", label: "settings", caption: "settingsCaption" }
+const navigation: NavigationItem[] = [
+  { id: "chat", icon: MessageSquare, en: "Chat", fr: "Discussion" },
+  { id: "workspaces", icon: FolderKanban, en: "Projects", fr: "Projets" },
+  { id: "models", icon: Boxes, en: "Models", fr: "Modèles" },
+  { id: "science", icon: FlaskConical, en: "Science", fr: "Science" },
+  { id: "artifacts", icon: FileStack, en: "Artifacts", fr: "Artefacts" },
+  { id: "mcp", icon: Cable, en: "MCP", fr: "MCP" },
+  { id: "skills", icon: Library, en: "Skills", fr: "Skills" },
+  { id: "extensions", icon: Puzzle, en: "Extensions", fr: "Extensions" },
+  { id: "compute", icon: Cpu, en: "Compute", fr: "Calcul" },
+  { id: "kernel", icon: TerminalSquare, en: "Kernel", fr: "Kernel" },
+  { id: "settings", icon: Settings, en: "Settings", fr: "Réglages" },
 ];
 
 export function App() {
-  const [surface, setSurface] = useState<Surface>("workspaces");
+  const [surface, setSurface] = useState<Surface>("chat");
   const [language, setLanguage] = useState<Language>(() => localStorage.getItem("frontier-language") === "fr" ? "fr" : "en");
-  useEffect(() => { document.title = `Frontier · ${surfaceText(language, "projectLedger")}`; }, [language]);
+  const [theme, setTheme] = useState<Theme>(() => localStorage.getItem("frontier-theme") === "light" ? "light" : "dark");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [chatKey, setChatKey] = useState(0);
   const [report, setReport] = useState<CapabilityReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [engineReport, setEngineReport] = useState<EngineDoctorReport | null>(null);
   const [engineError, setEngineError] = useState<string | null>(null);
   const [projectRecords, setProjectRecords] = useState<ProjectRecord[] | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
-  const active = surfaces.find(item => item.id === surface)!;
-  async function probe() { setError(null); try { setReport(await invoke<CapabilityReport>("capability_report")); } catch { setError("The native capability probe is only available in the Frontier desktop application."); } }
-  async function probeEngine() { setEngineError(null); try { setEngineReport(await invoke<EngineDoctorReport>("engine_doctor_development")); } catch (reason) { setEngineError(reason instanceof Error ? reason.message : "The development engine probe is unavailable."); } }
-  async function refreshWorkspaces() { setWorkspaceError(null); try { setProjectRecords((await invoke<{ projects: ProjectRecord[] }>("workspace_projects_development")).projects); } catch (reason) { setWorkspaceError(reason instanceof Error ? reason.message : "The development project store is unavailable."); } }
-  async function createWorkspace(name: string) { await invoke("create_workspace_project_development", { name }); await refreshWorkspaces(); }
-  useEffect(() => { void probe(); void probeEngine(); void refreshWorkspaces(); }, []);
-  useEffect(() => { document.documentElement.lang = language; localStorage.setItem("frontier-language", language); }, [language]);
-  return <main className="shell"><aside className="rail"><div className="brand"><span>FR</span><strong>Frontier</strong></div><p className="rail-label">{translate(language, "workbench")}</p><nav aria-label={translate(language, "workbench")}>{surfaces.map((item, index) => <button key={item.id} className={surface === item.id ? "active" : ""} onClick={() => setSurface(item.id)} aria-current={surface === item.id ? "page" : undefined}><span className="index">{String(index + 1).padStart(2, "0")}</span><span>{translate(language, item.label)}<small>{translate(language, item.caption)}</small></span></button>)}</nav><div className="rail-foot"><span className="pulse" />{translate(language, "localBoundary")}</div></aside><section className="content"><header><div><p className="eyebrow">{translate(language, active.caption)}</p><h1>{translate(language, active.label)}</h1></div><div className="header-controls"><label htmlFor="language">{translate(language, "language")}</label><select id="language" value={language} onChange={event => setLanguage(event.target.value as Language)}><option value="en">English</option><option value="fr">Français</option></select><p className="session">{translate(language, "noRemote")}</p></div></header>{surface === "workspaces" && <WorkspaceSurface projects={projectRecords} error={workspaceError} refresh={refreshWorkspaces} create={createWorkspace} />}{surface === "models" && <ModelsSurface report={report} error={error} probe={probe} engineReport={engineReport} engineError={engineError} probeEngine={probeEngine} />}{surface === "agent" && <AgentSurface projects={projectRecords} />}{surface === "kernel" && <KernelSurface projects={projectRecords} />}{surface === "science" && <><ScienceSurface /><ReviewerSurface /></>}{surface === "artifacts" && <><ArtifactsSurface /><AnnotationSurface /></>}{surface === "compute" && <ComputeSurface />}{surface === "settings" && <SettingsSurface />}</section></main>;
+  const activeItem = navigation.find(item => item.id === surface) ?? navigation[0];
+  const ActiveIcon = activeItem.icon;
+  const activeProjects = projectRecords?.filter(project => project.archived_at === null) ?? [];
+
+  async function probe() {
+    setError(null);
+    try {
+      setReport(await invoke<CapabilityReport>("capability_report"));
+    } catch {
+      setError(language === "fr" ? "La sonde native est disponible uniquement dans l’application Shoko's LLM." : "The native probe is available only in the Shoko's LLM desktop app.");
+    }
+  }
+
+  async function probeEngine() {
+    setEngineError(null);
+    try {
+      setEngineReport(await invoke<EngineDoctorReport>("engine_doctor_development"));
+    } catch (reason) {
+      setEngineError(reason instanceof Error ? reason.message : "FR-ENGINE-UNAVAILABLE");
+    }
+  }
+
+  async function refreshWorkspaces() {
+    setWorkspaceError(null);
+    try {
+      setProjectRecords((await invoke<{ projects: ProjectRecord[] }>("workspace_projects_development")).projects);
+    } catch (reason) {
+      setWorkspaceError(reason instanceof Error ? reason.message : "FR-PROJECT-STORE-UNAVAILABLE");
+    }
+  }
+
+  async function createWorkspace(name: string) {
+    await invoke("create_workspace_project_development", { name });
+    await refreshWorkspaces();
+  }
+
+  function startNewChat() {
+    setChatKey(value => value + 1);
+    setSurface("chat");
+  }
+
+  useEffect(() => {
+    void probe();
+    void probeEngine();
+    void refreshWorkspaces();
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+    localStorage.setItem("frontier-language", language);
+  }, [language]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem("frontier-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    document.title = "Shoko's LLM | " + (language === "fr" ? activeItem.fr : activeItem.en);
+  }, [activeItem, language]);
+
+  useEffect(() => {
+    function handleKeyboardShortcut(event: KeyboardEvent) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        startNewChat();
+      }
+    }
+    window.addEventListener("keydown", handleKeyboardShortcut);
+    return () => window.removeEventListener("keydown", handleKeyboardShortcut);
+  }, []);
+
+  return (
+    <div className={"app-frame" + (sidebarOpen ? "" : " sidebar-collapsed") + (inspectorOpen ? "" : " inspector-collapsed")}>
+      <aside className="primary-sidebar" aria-label={language === "fr" ? "Navigation principale" : "Primary navigation"}>
+        <div className="sidebar-brand">
+          <button className="brand-button" type="button" onClick={startNewChat} aria-label={language === "fr" ? "Nouvelle discussion" : "New chat"}>
+            <span className="brand-glyph"><Bot size={17} /></span>
+            <span>Shoko's LLM</span>
+          </button>
+          <button className="icon-button sidebar-collapse" type="button" onClick={() => setSidebarOpen(false)} aria-label={language === "fr" ? "Réduire la navigation" : "Collapse navigation"}>
+            <ChevronLeft size={17} />
+          </button>
+        </div>
+
+        <button className="new-chat-button" type="button" onClick={startNewChat}>
+          <Plus size={16} />
+          <span>{language === "fr" ? "Nouvelle discussion" : "New chat"}</span>
+          <kbd>Ctrl N</kbd>
+        </button>
+
+        <nav className="sidebar-nav" aria-label={language === "fr" ? "Sections" : "Sections"}>
+          <p className="nav-label">{language === "fr" ? "Espace de travail" : "Workspace"}</p>
+          {navigation.slice(0, 3).map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
+          <p className="nav-label">{language === "fr" ? "Outils" : "Tools"}</p>
+          {navigation.slice(3, 8).map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
+          <p className="nav-label">{language === "fr" ? "Système" : "System"}</p>
+          {navigation.slice(8).map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
+        </nav>
+
+        <div className="project-shortlist">
+          <div className="project-shortlist-title">
+            <span>{language === "fr" ? "Projets locaux" : "Local projects"}</span>
+            <button className="icon-button" type="button" onClick={() => setSurface("workspaces")} aria-label={language === "fr" ? "Gérer les projets" : "Manage projects"}>
+              <Plus size={14} />
+            </button>
+          </div>
+          {activeProjects.slice(0, 4).map(project => (
+            <button key={project.id} className="project-shortcut" type="button" onClick={() => setSurface("workspaces")}>
+              <FolderKanban size={14} />
+              <span>{project.name}</span>
+            </button>
+          ))}
+          {activeProjects.length === 0 && <p className="sidebar-empty">{workspaceError ? (language === "fr" ? "Registre indisponible" : "Store unavailable") : (language === "fr" ? "Aucun projet" : "No projects")}</p>}
+        </div>
+
+        <div className="sidebar-boundary">
+          <ShieldCheck size={15} />
+          <span>{language === "fr" ? "Données locales par défaut" : "Local data by default"}</span>
+        </div>
+      </aside>
+
+      {!sidebarOpen && (
+        <button className="icon-button sidebar-expand" type="button" onClick={() => setSidebarOpen(true)} aria-label={language === "fr" ? "Ouvrir la navigation" : "Open navigation"}>
+          <PanelLeftOpen size={18} />
+        </button>
+      )}
+
+      <main className="workspace-shell">
+        <header className="workspace-header">
+          <div className="workspace-heading">
+            <ActiveIcon size={18} />
+            <div>
+              <p>Shoko's LLM</p>
+              <h1>{language === "fr" ? activeItem.fr : activeItem.en}</h1>
+            </div>
+          </div>
+          <div className="header-actions">
+            <label className="language-control">
+              <span>{language === "fr" ? "Langue" : "Language"}</span>
+              <select value={language} onChange={event => setLanguage(event.target.value as Language)}>
+                <option value="en">EN</option>
+                <option value="fr">FR</option>
+              </select>
+            </label>
+            <button className="icon-button" type="button" onClick={() => setTheme(value => value === "dark" ? "light" : "dark")} aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"}>
+              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+            <button className="icon-button" type="button" onClick={() => setInspectorOpen(value => !value)} aria-label={language === "fr" ? "Afficher le contexte" : "Show context"}>
+              <PanelRightOpen size={17} />
+            </button>
+          </div>
+        </header>
+
+        <div className="workspace-grid">
+          <section className="workspace-content" aria-label={language === "fr" ? activeItem.fr : activeItem.en}>
+            {surface === "chat" && <ChatSurface key={chatKey} projects={projectRecords} language={language} onNavigate={setSurface} />}
+            {surface === "workspaces" && <WorkspaceSurface projects={projectRecords} error={workspaceError} refresh={refreshWorkspaces} create={createWorkspace} />}
+            {surface === "models" && <ModelsSurface report={report} error={error} probe={probe} engineReport={engineReport} engineError={engineError} probeEngine={probeEngine} />}
+            {surface === "science" && <ScienceWorkbench projects={projectRecords} language={language} />}
+            {surface === "artifacts" && <><ArtifactsSurface /><AnnotationSurface /></>}
+            {surface === "mcp" && <RegistrySurface kind="connectors" language={language} />}
+            {surface === "skills" && <RegistrySurface kind="skills" language={language} />}
+            {surface === "extensions" && <RegistrySurface kind="extensions" language={language} />}
+            {surface === "compute" && <ComputeSurface />}
+            {surface === "kernel" && <KernelSurface projects={projectRecords} />}
+            {surface === "settings" && <SettingsSurface />}
+          </section>
+
+          {inspectorOpen && surface !== "science" && (
+            <aside className="context-panel" aria-label={language === "fr" ? "Contexte" : "Context"}>
+              <div className="context-header">
+                <div>
+                  <p className="context-kicker">{language === "fr" ? "Contexte" : "Context"}</p>
+                  <h2>{language === "fr" ? "État local" : "Local state"}</h2>
+                </div>
+                <button className="icon-button" type="button" onClick={() => setInspectorOpen(false)} aria-label={language === "fr" ? "Fermer le contexte" : "Close context"}>
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+              <dl className="context-list">
+                <div><dt>{language === "fr" ? "Moteur" : "Engine"}</dt><dd>{engineReport?.status ?? (engineError ? (language === "fr" ? "Indisponible" : "Unavailable") : (language === "fr" ? "Vérification" : "Checking"))}</dd></div>
+                <div><dt>{language === "fr" ? "Projets actifs" : "Active projects"}</dt><dd>{activeProjects.length}</dd></div>
+                <div><dt>{language === "fr" ? "Hôte" : "Host"}</dt><dd>{report ? report.operatingSystem + " " + report.architecture : (language === "fr" ? "Non détecté" : "Not detected")}</dd></div>
+                <div><dt>{language === "fr" ? "Cœurs logiques" : "Logical cores"}</dt><dd>{report?.logicalCores ?? "N/A"}</dd></div>
+              </dl>
+              <div className="context-actions">
+                <button type="button" onClick={() => setSurface("models")}><Boxes size={15} />{language === "fr" ? "Gérer les modèles" : "Manage models"}</button>
+                <button type="button" onClick={() => setSurface("compute")}><Cpu size={15} />{language === "fr" ? "Ouvrir le calcul" : "Open compute"}</button>
+                <button type="button" onClick={() => setSurface("settings")}><Settings size={15} />{language === "fr" ? "Ouvrir les réglages" : "Open settings"}</button>
+              </div>
+              <div className="context-note">
+                <ShieldCheck size={16} />
+                <p>{language === "fr" ? "Aucun fournisseur distant n’est configuré. Les requêtes restent locales." : "No remote provider is configured. Requests remain local."}</p>
+              </div>
+            </aside>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function NavigationButton({ item, language, current, onSelect }: { item: NavigationItem; language: Language; current: Surface; onSelect: (surface: Surface) => void }) {
+  const Icon = item.icon;
+  return (
+    <button type="button" className="nav-button" onClick={() => onSelect(item.id)} aria-current={current === item.id ? "page" : undefined}>
+      <Icon size={16} />
+      <span>{language === "fr" ? item.fr : item.en}</span>
+    </button>
+  );
+}
+
+type SlashCommand = {
+  name: string;
+  icon: LucideIcon;
+  en: string;
+  fr: string;
+  target?: Surface;
+  action?: "doctor" | "clear";
+};
+
+const slashCommands: SlashCommand[] = [
+  { name: "/new", icon: Plus, en: "Clear the current draft and output", fr: "Effacer le brouillon et la sortie", action: "clear" },
+  { name: "/projects", icon: FolderKanban, en: "Open local projects", fr: "Ouvrir les projets locaux", target: "workspaces" },
+  { name: "/models", icon: Boxes, en: "Open model management", fr: "Ouvrir la gestion des modèles", target: "models" },
+  { name: "/mcp", icon: Cable, en: "Inspect MCP connectors", fr: "Inspecter les connecteurs MCP", target: "mcp" },
+  { name: "/skills", icon: Library, en: "Inspect installed skills", fr: "Inspecter les skills installés", target: "skills" },
+  { name: "/extensions", icon: Puzzle, en: "Inspect executable extensions", fr: "Inspecter les extensions exécutables", target: "extensions" },
+  { name: "/science", icon: FlaskConical, en: "Open the science workbench", fr: "Ouvrir l’espace Science", target: "science" },
+  { name: "/doctor", icon: ShieldCheck, en: "Run the local engine diagnostic", fr: "Exécuter le diagnostic du moteur local", action: "doctor" },
+  { name: "/settings", icon: Settings, en: "Open application settings", fr: "Ouvrir les réglages", target: "settings" },
+];
+
+function ChatSurface({ projects, language, onNavigate }: { projects: ProjectRecord[] | null; language: Language; onNavigate: (surface: Surface) => void }) {
+  const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
+  const [projectId, setProjectId] = useState("");
+  const [model, setModel] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
+  const [activity, setActivity] = useState<AgentActivity | null>(null);
+  const [output, setOutput] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const nextProjectId = activeProjects.some(project => project.id === projectId) ? projectId : activeProjects[0]?.id ?? "";
+    if (nextProjectId !== projectId) setProjectId(nextProjectId);
+  }, [activeProjects, projectId]);
+
+  useEffect(() => {
+    if (!projectId) {
+      setActivity(null);
+      return;
+    }
+    void refreshActivity(projectId);
+  }, [projectId]);
+
+  const filteredCommands = useMemo(() => {
+    const query = prompt.startsWith("/") ? prompt.toLowerCase() : "";
+    return slashCommands.filter(command => command.name.startsWith(query));
+  }, [prompt]);
+
+  async function refreshActivity(nextProjectId = projectId) {
+    if (!nextProjectId) return;
+    try {
+      setActivity(await invoke<AgentActivity>("local_agent_activity_development", { projectId: nextProjectId }));
+    } catch {
+      setActivity(null);
+    }
+  }
+
+  async function runCommand(command: SlashCommand) {
+    setCommandPaletteOpen(false);
+    setPrompt("");
+    if (command.target) {
+      onNavigate(command.target);
+      return;
+    }
+    if (command.action === "clear") {
+      setLastPrompt(null);
+      setOutput(null);
+      setError(null);
+      setActivity(null);
+      return;
+    }
+    if (command.action === "doctor") {
+      setBusy(true);
+      setError(null);
+      setLastPrompt(command.name);
+      try {
+        const result = await invoke<EngineDoctorReport>("engine_doctor_development");
+        setOutput(JSON.stringify(result, null, 2));
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : "FR-ENGINE-UNAVAILABLE");
+      } finally {
+        setBusy(false);
+      }
+    }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const trimmedPrompt = prompt.trim();
+    if (trimmedPrompt.startsWith("/")) {
+      const command = slashCommands.find(item => item.name === trimmedPrompt.toLowerCase());
+      if (command) {
+        await runCommand(command);
+        return;
+      }
+      setError(language === "fr" ? "Commande inconnue. Ouvrez la liste avec le bouton / ." : "Unknown command. Open the list with the / button.");
+      return;
+    }
+    if (!projectId || !model.trim() || !trimmedPrompt) return;
+    setBusy(true);
+    setError(null);
+    setOutput(null);
+    setLastPrompt(trimmedPrompt);
+    setPrompt("");
+    try {
+      const result = await invoke<{ output: string }>("run_local_agent_development", { projectId, model: model.trim(), prompt: trimmedPrompt });
+      setOutput(result.output);
+      await refreshActivity(projectId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FR-AGENT-RUN-FAILED");
+      await refreshActivity(projectId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="chat-workspace">
+      <div className="chat-transcript" aria-live="polite">
+        {!lastPrompt && !activity && (
+          <div className="chat-empty">
+            <span className="empty-icon"><Bot size={22} /></span>
+            <h2>{language === "fr" ? "Que doit faire Shoko's LLM ?" : "What should Shoko's LLM do?"}</h2>
+            <p>{language === "fr" ? "Choisissez un projet et un modèle local. Tapez / pour ouvrir les commandes." : "Choose a project and an exact local model. Type / to open commands."}</p>
+            {!projectId && <button type="button" onClick={() => onNavigate("workspaces")}><FolderKanban size={15} />{language === "fr" ? "Créer un projet" : "Create a project"}</button>}
+          </div>
+        )}
+
+        {lastPrompt && (
+          <article className="chat-message user-message">
+            <p className="message-author">{language === "fr" ? "Vous" : "You"}</p>
+            <div>{lastPrompt}</div>
+          </article>
+        )}
+
+        {busy && (
+          <div className="execution-state">
+            <RefreshCw size={15} className="spin" />
+            <span>{language === "fr" ? "Exécution locale en cours" : "Running locally"}</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="inline-error" role="alert">
+            <CircleAlert size={17} />
+            <div><strong>{language === "fr" ? "Exécution interrompue" : "Run stopped"}</strong><p>{error}</p></div>
+          </div>
+        )}
+
+        {output !== null && (
+          <article className="chat-message assistant-message">
+            <div className="assistant-heading"><span className="assistant-mark"><Bot size={15} /></span><span>Shoko's LLM</span></div>
+            <MarkdownContent content={output} />
+          </article>
+        )}
+
+        {activity && (
+          <section className="activity-ledger">
+            <div className="activity-heading"><Code2 size={16} /><h3>{language === "fr" ? "Activité du projet" : "Project activity"}</h3></div>
+            <div className="activity-grid">
+              <div><span>{language === "fr" ? "Plan" : "Plan"}</span><p>{activity.plan ?? (language === "fr" ? "Aucun plan enregistré" : "No recorded plan")}</p></div>
+              <div><span>Todos</span><p>{activity.todos.length ? activity.todos.map(todo => todo.state + ": " + todo.text).join("\n") : (language === "fr" ? "Aucun todo enregistré" : "No recorded todo")}</p></div>
+              <div><span>{language === "fr" ? "Outils" : "Tools"}</span><p>{activity.tool_calls.length ? activity.tool_calls.map(call => call.state + ": " + call.tool_name).join("\n") : (language === "fr" ? "Aucun appel d’outil" : "No tool call")}</p></div>
+            </div>
+          </section>
+        )}
+      </div>
+
+      <form className="chat-composer" onSubmit={event => void submit(event)}>
+        {commandPaletteOpen && (
+          <div className="command-palette" role="listbox" aria-label={language === "fr" ? "Commandes slash" : "Slash commands"}>
+            <div className="command-title"><Command size={15} /><span>{language === "fr" ? "Commandes" : "Commands"}</span><kbd>Esc</kbd></div>
+            {filteredCommands.map(command => {
+              const CommandIcon = command.icon;
+              return (
+                <button key={command.name} type="button" onClick={() => void runCommand(command)}>
+                  <CommandIcon size={15} />
+                  <span><strong>{command.name}</strong><small>{language === "fr" ? command.fr : command.en}</small></span>
+                </button>
+              );
+            })}
+            {filteredCommands.length === 0 && <p>{language === "fr" ? "Aucune commande correspondante" : "No matching command"}</p>}
+          </div>
+        )}
+        <div className="composer-context">
+          <select value={projectId} onChange={event => setProjectId(event.target.value)} aria-label={language === "fr" ? "Projet" : "Project"} disabled={activeProjects.length === 0}>
+            {activeProjects.length === 0 && <option value="">{language === "fr" ? "Aucun projet actif" : "No active project"}</option>}
+            {activeProjects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+          </select>
+          <input value={model} onChange={event => setModel(event.target.value)} placeholder={language === "fr" ? "Modèle local exact, par exemple qwen3" : "Exact local model, for example qwen3"} aria-label={language === "fr" ? "Modèle local" : "Local model"} />
+        </div>
+        <textarea
+          value={prompt}
+          onChange={event => { setPrompt(event.target.value); setCommandPaletteOpen(event.target.value.startsWith("/")); }}
+          onKeyDown={event => { if (event.key === "Escape") setCommandPaletteOpen(false); }}
+          placeholder={language === "fr" ? "Demandez une modification, une analyse ou tapez /" : "Ask for a change, analysis, or type /"}
+          rows={3}
+        />
+        <div className="composer-toolbar">
+          <button className="composer-tool" type="button" onClick={() => { setPrompt(value => value.startsWith("/") ? value : "/"); setCommandPaletteOpen(true); }} aria-label={language === "fr" ? "Ouvrir les commandes" : "Open commands"}>
+            <Command size={16} /><span>{language === "fr" ? "Commandes" : "Commands"}</span>
+          </button>
+          <span className="composer-boundary"><ShieldCheck size={14} />{language === "fr" ? "Local" : "Local"}</span>
+          <button className="send-button" type="submit" disabled={busy || (!prompt.trim().startsWith("/") && (!projectId || !model.trim() || !prompt.trim()))} aria-label={language === "fr" ? "Exécuter" : "Run"}>
+            <Send size={16} />
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+export function MarkdownContent({ content }: { content: string }) {
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
+          img: ({ alt, ...props }) => <img {...props} alt={alt ?? ""} loading="lazy" />,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
+
+type RegistryEntry = { id: string; capabilities: string[]; network: string; availability: string };
+
+function RegistrySurface({ kind, language }: { kind: "connectors" | "skills" | "extensions"; language: Language }) {
+  const [entries, setEntries] = useState<RegistryEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    setError(null);
+    setEntries(null);
+    try {
+      const command = kind === "connectors" ? "scientific_connectors_development" : kind === "skills" ? "scientific_skills_development" : "extensions_development";
+      const result = await invoke<Record<string, RegistryEntry[]>>(command);
+      setEntries(result[kind]);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FR-REGISTRY-UNAVAILABLE");
+    }
+  }
+
+  useEffect(() => { void load(); }, [kind]);
+
+  const isConnectors = kind === "connectors";
+  const isExtensions = kind === "extensions";
+  const RegistryIcon = isConnectors ? Cable : isExtensions ? Puzzle : Library;
+  return (
+    <section className="registry-page">
+      <div className="page-intro">
+        <span className="page-icon"><RegistryIcon size={18} /></span>
+        <div>
+          <h2>{isConnectors ? "MCP" : isExtensions ? (language === "fr" ? "Extensions" : "Extensions") : "Skills"}</h2>
+          <p>{isConnectors
+            ? (language === "fr" ? "Connecteurs disponibles et limites réseau déclarées par le moteur local." : "Available connectors and network boundaries reported by the local engine.")
+            : isExtensions
+              ? (language === "fr" ? "Seules les extensions validées et exécutables apparaissent ici." : "Only validated and executable extensions appear here.")
+              : (language === "fr" ? "Skills installés, capacités et limites d’exécution déclarées par le moteur local." : "Installed skills, capabilities, and execution boundaries reported by the local engine.")}</p>
+        </div>
+      </div>
+
+      {error && <div className="inline-error" role="alert"><CircleAlert size={17} /><div><strong>{language === "fr" ? "Registre indisponible" : "Registry unavailable"}</strong><p>{error}</p><button type="button" onClick={() => void load()}><RefreshCw size={14} />{language === "fr" ? "Réessayer" : "Retry"}</button></div></div>}
+
+      {entries === null && !error && <div className="registry-loading" aria-label={language === "fr" ? "Chargement" : "Loading"}><span /><span /><span /></div>}
+
+      {entries && (
+        <div className="registry-list">
+          {entries.map(entry => (
+            <article key={entry.id} className="registry-row">
+              <div className="registry-symbol"><RegistryIcon size={17} /></div>
+              <div className="registry-main"><h3>{entry.id}</h3><p>{entry.capabilities.join(", ")}</p></div>
+              <dl><div><dt>{language === "fr" ? "Réseau" : "Network"}</dt><dd>{entry.network}</dd></div><div><dt>{language === "fr" ? "Disponibilité" : "Availability"}</dt><dd>{entry.availability}</dd></div></dl>
+            </article>
+          ))}
+          {entries.length === 0 && <div className="registry-empty"><p>{language === "fr" ? "Aucune intégration exécutable détectée. Les extensions non connectables restent masquées." : "No executable integration detected. Extensions that cannot connect remain hidden."}</p></div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ScienceWorkbench({ projects, language }: { projects: ProjectRecord[] | null; language: Language }) {
+  const [panel, setPanel] = useState<"notebook" | "artifacts">("notebook");
+  return (
+    <section className="science-workbench">
+      <div className="science-conversation">
+        <div className="science-titlebar">
+          <div><p>{language === "fr" ? "Projet scientifique" : "Science project"}</p><h2>{language === "fr" ? "Recherche et preuves" : "Research and evidence"}</h2></div>
+          <div className="science-panel-switch" role="group" aria-label={language === "fr" ? "Panneau scientifique" : "Science panel"}>
+            <button type="button" aria-pressed={panel === "notebook"} onClick={() => setPanel("notebook")}><Code2 size={15} />Notebook</button>
+            <button type="button" aria-pressed={panel === "artifacts"} onClick={() => setPanel("artifacts")}><FileStack size={15} />{language === "fr" ? "Artefacts" : "Artifacts"}</button>
+          </div>
+        </div>
+        <ScienceSurface />
+        <ReviewerSurface />
+      </div>
+      <aside className="science-inspector" aria-label={panel === "notebook" ? "Notebook" : (language === "fr" ? "Artefacts" : "Artifacts")}>
+        <div className="science-inspector-header">
+          <div className="science-file-icon">{panel === "notebook" ? <Code2 size={16} /> : <FileStack size={16} />}</div>
+          <div><p>{panel === "notebook" ? "python.ipynb" : (language === "fr" ? "Artefacts du projet" : "Project artifacts")}</p><span>{language === "fr" ? "Stockage local" : "Local storage"}</span></div>
+        </div>
+        <div className="science-inspector-body">
+          {panel === "notebook" ? <KernelSurface projects={projects} /> : <><ArtifactsSurface /><AnnotationSurface /></>}
+        </div>
+      </aside>
+    </section>
+  );
 }
 
 function ReviewerSurface() { const language = localStorage.getItem("frontier-language") === "fr" ? "fr" : "en"; const [findings, setFindings] = useState<Array<{ claim_id: string; code: string; severity: string; message: string }> | null>(null); const [error, setError] = useState<string | null>(null); async function review() { try { setError(null); setFindings((await invoke<{ findings: Array<{ claim_id: string; code: string; severity: string; message: string }> }>("review_scientific_claims_development")).findings); } catch (reason) { setError(reason instanceof Error ? reason.message : surfaceText(language, "reviewer")); } } useEffect(() => { void review(); }, []); return <section className="surface review-panel"><div className="surface-mark">EVIDENCE REVIEW</div><h2>{findings ? `${findings.length} ${surfaceText(language, findings.length === 1 ? "openFindingOne" : "openFindingMany")}` : surfaceText(language, "reviewer")}</h2><p>Findings identify missing evidence. They do not rerun analyses or grant scientific approval.</p>{error && <p className="agent-error">{error}</p>}{findings && <Evidence rows={findings.length ? findings.map(finding => `${finding.severity}: ${finding.code} · claim ${finding.claim_id} · ${finding.message}`) : [surfaceText(language, "noEvidenceGaps")]} />}<button className="action" onClick={() => void review()}>Run evidence review</button></section>; }
