@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, latestProgress } from "./ModelsSurface";
+import { formatBytes, formatNanoseconds, latestProgress, parseOptionalInteger } from "./ModelsSurface";
 
 describe("model transfer presentation", () => {
   it("formats binary sizes without inventing precision", () => {
@@ -18,5 +18,11 @@ describe("model transfer presentation", () => {
     } as never);
     expect(detail?.percent).toBe(80);
     expect(detail?.bytes_per_second).toBe(12);
+  });
+
+  it("keeps optional profile values explicit", () => {
+    expect(parseOptionalInteger("")).toBeNull();
+    expect(parseOptionalInteger(" 4096 ")).toBe(4096);
+    expect(formatNanoseconds(1_250_000_000)).toBe("1.25 s");
   });
 });

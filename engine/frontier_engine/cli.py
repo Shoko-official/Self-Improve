@@ -26,8 +26,9 @@ from frontier_engine.model_registry import HuggingFaceHub, ModelRegistry
 from frontier_engine.model_transfers import MODEL_TRANSFER_OPERATION, create_model_transfer, run_model_transfer
 from frontier_engine.environments import create_python_environment, create_r_environment, install_python_packages, install_r_packages, list_manifests, probe_environment
 from frontier_engine.generation import run_generation
+from frontier_engine.inference import plan_ollama_inference
 from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
-from frontier_engine.runtimes import stream_ollama
+from frontier_engine.runtimes import stream_ollama, warmup_ollama
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer, execute_s3_signed_transfer
@@ -292,19 +293,36 @@ def generations(root: Path, project_id: str | None = None, generation_id: str | 
         store.close()
 
 
-def generate_local(root: Path, project_id: str, runtime: str, model: str, prompt: str, session_id: str | None = None) -> dict[str, object]:
+def generate_local(root: Path, project_id: str, runtime: str, model: str, prompt: str, session_id: str | None = None, context_length: int | None = None, cpu_threads: int | None = None, batch_size: int | None = None, gpu_layers: int | None = None, keep_alive: str = "15m") -> dict[str, object]:
     store = FrontierStore(root)
     try:
-        generation_id = store.create_generation(project_id, runtime, model, prompt, session_id)
+        profile = plan_ollama_inference([model], context_length, cpu_threads, batch_size, gpu_layers, keep_alive) if runtime == "ollama" else {}
+        generation_id = store.create_generation(project_id, runtime, model, prompt, session_id, profile)
         if runtime != "ollama":
             job_id = str(store.generation(generation_id)["job_id"])
             store.claim_job(job_id)
             store.fail_job(job_id, {"code": "FR-GENERATION-RUNTIME", "detail": f"Unsupported local runtime: {runtime}"})
             return store.generation(generation_id)
-        list(run_generation(store, generation_id, stream_ollama(model, prompt)))
+        if not profile["supported"]:
+            job_id = str(store.generation(generation_id)["job_id"])
+            store.claim_job(job_id)
+            store.fail_job(job_id, {"code": "FR-INFERENCE-PROFILE", "reasons": profile["reasons"]})
+            return store.generation(generation_id)
+        list(run_generation(store, generation_id, stream_ollama(model, prompt, profile["options"], str(profile["keep_alive"]), profile["runtime_probe"])))
         return store.generation(generation_id)
     finally:
         store.close()
+
+
+def inference_plan(models: list[str], context_length: int | None = None, cpu_threads: int | None = None, batch_size: int | None = None, gpu_layers: int | None = None, keep_alive: str = "15m", concurrency: int = 1) -> dict[str, object]:
+    return {"plan": plan_ollama_inference(models, context_length, cpu_threads, batch_size, gpu_layers, keep_alive, concurrency)}
+
+
+def warmup_local_model(model: str, context_length: int | None = None, cpu_threads: int | None = None, batch_size: int | None = None, gpu_layers: int | None = None, keep_alive: str = "15m") -> dict[str, object]:
+    plan = plan_ollama_inference([model], context_length, cpu_threads, batch_size, gpu_layers, keep_alive)
+    if not plan["supported"]:
+        return {"plan": plan, "warmup": None}
+    return {"plan": plan, "warmup": warmup_ollama(model, plan["options"], str(plan["keep_alive"]), plan["runtime_probe"])}
 
 
 def install_ollama_model(root: Path, project_id: str, model: str) -> dict[str, object]:
@@ -643,7 +661,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -694,6 +712,13 @@ def main() -> None:
     parser.add_argument("--generation-id")
     parser.add_argument("--runtime")
     parser.add_argument("--model")
+    parser.add_argument("--profile-model", action="append")
+    parser.add_argument("--context-length", type=int)
+    parser.add_argument("--cpu-threads", type=int)
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--gpu-layers", type=int)
+    parser.add_argument("--keep-alive", default="15m")
+    parser.add_argument("--concurrency", type=int, default=1)
     parser.add_argument("--repository-id")
     parser.add_argument("--filename")
     parser.add_argument("--revision", default="main")
@@ -889,7 +914,15 @@ def main() -> None:
     elif args.command == "generate-local":
         if args.project_id is None or args.runtime is None or args.model is None or args.prompt is None:
             parser.error("generate-local requires --project-id, --runtime, --model, and --prompt")
-        result = generate_local(root, args.project_id, args.runtime, args.model, args.prompt, args.session_id)
+        result = generate_local(root, args.project_id, args.runtime, args.model, args.prompt, args.session_id, args.context_length, args.cpu_threads, args.batch_size, args.gpu_layers, args.keep_alive)
+    elif args.command == "inference-plan":
+        if not args.profile_model:
+            parser.error("inference-plan requires one or more --profile-model")
+        result = inference_plan(args.profile_model, args.context_length, args.cpu_threads, args.batch_size, args.gpu_layers, args.keep_alive, args.concurrency)
+    elif args.command == "warmup-model":
+        if args.model is None:
+            parser.error("warmup-model requires --model")
+        result = warmup_local_model(args.model, args.context_length, args.cpu_threads, args.batch_size, args.gpu_layers, args.keep_alive)
     elif args.command == "install-ollama-model":
         if args.project_id is None or args.model is None:
             parser.error("install-ollama-model requires --project-id and --model")
