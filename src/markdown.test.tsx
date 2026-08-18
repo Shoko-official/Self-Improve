@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MarkdownContent } from "./App";
+import { MarkdownContent, mcpMarkdown } from "./App";
 
 describe("MarkdownContent", () => {
   it("renders GitHub-flavored Markdown structures", () => {
@@ -24,5 +24,16 @@ describe("MarkdownContent", () => {
     expect(html).toContain("&lt;script&gt;");
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noreferrer"');
+  });
+});
+
+describe("mcpMarkdown", () => {
+  it("extracts the first text block from an MCP result", () => {
+    expect(mcpMarkdown({ content: [{ type: "image", data: "ignored" }, { type: "text", text: "## Verified\n\n- safe" }] })).toBe("## Verified\n\n- safe");
+  });
+
+  it("ignores malformed or non-text content", () => {
+    expect(mcpMarkdown({ content: [{ type: "image", data: "ignored" }] })).toBeNull();
+    expect(mcpMarkdown({ content: "not-an-array" })).toBeNull();
   });
 });

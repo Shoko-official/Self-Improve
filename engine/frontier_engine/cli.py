@@ -28,6 +28,7 @@ from frontier_engine.model_transfers import MODEL_TRANSFER_OPERATION, create_mod
 from frontier_engine.environments import create_python_environment, create_r_environment, install_python_packages, install_r_packages, list_manifests, probe_environment
 from frontier_engine.generation import run_generation
 from frontier_engine.inference import plan_ollama_inference
+from frontier_engine.integration_registry import IntegrationLedger, call_mcp_tool, discover_extensions, discover_skills, probe_mcp_servers
 from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
 from frontier_engine.runtimes import stream_ollama, warmup_ollama
 from frontier_engine.shell import execute_project_shell
@@ -534,13 +535,46 @@ def workspace_tool(root: Path, project_id: str, workspace: Path, action: str, re
         agent.close(); store.close()
 
 
-def run_agent(root: Path, project_id: str, model: str, prompt: str) -> dict[str, object]:
+def run_agent(root: Path, project_id: str, model: str, prompt: str, skill_ids: list[str] | None = None) -> dict[str, object]:
     store = FrontierStore(root)
     try: store.require_active_project(project_id)
     finally: store.close()
     state = AgentStateStore(root / "agent.sqlite3")
-    try: return run_local_agent(state, project_id, model, prompt)
+    try: return run_local_agent(state, project_id, model, prompt, skill_ids=skill_ids)
     finally: state.close()
+
+
+def probe_integrations(root: Path, approved: bool) -> dict[str, object]:
+    ledger = IntegrationLedger(root / "integrations.sqlite3")
+    try:
+        result = probe_mcp_servers(approved)
+        for connector in result["connectors"]:
+            ledger.record(str(connector["id"]), "probe", "succeeded")
+        for failure in result["failures"]:
+            ledger.record(str(failure["id"]), "probe", "failed", str(failure["code"]))
+        return {**result, "events": ledger.events()}
+    finally:
+        ledger.close()
+
+
+def invoke_mcp(root: Path, project_id: str, server_id: str, tool_name: str, arguments: dict[str, object], approved: bool) -> dict[str, object]:
+    frontier = FrontierStore(root)
+    try:
+        frontier.require_active_project(project_id)
+    finally:
+        frontier.close()
+    ledger = IntegrationLedger(root / "integrations.sqlite3")
+    try:
+        try:
+            result = call_mcp_tool(server_id, tool_name, arguments, approved)
+        except Exception as error:
+            code = str(error).split(":", 1)[0] if str(error).startswith("FR-") else "FR-MCP-CALL"
+            ledger.record(server_id, f"tool:{tool_name}", "failed", code, project_id)
+            raise
+        ledger.record(server_id, f"tool:{tool_name}", "succeeded", project_id=project_id)
+        return {**result, "events": ledger.events(project_id)}
+    finally:
+        ledger.close()
 
 
 def serve_kernel_stdio(root: Path) -> None:
@@ -764,7 +798,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -818,6 +852,10 @@ def main() -> None:
     parser.add_argument("--schedule-json", default='{"kind":"manual"}')
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--external-approved", action="store_true")
+    parser.add_argument("--skill-id", action="append")
+    parser.add_argument("--mcp-server-id")
+    parser.add_argument("--mcp-tool-name")
+    parser.add_argument("--mcp-arguments", default="{}")
     parser.add_argument("--generation-id")
     parser.add_argument("--runtime")
     parser.add_argument("--model")
@@ -1041,7 +1079,7 @@ def main() -> None:
     elif args.command == "agent-run":
         if args.project_id is None or args.model is None or args.prompt is None:
             parser.error("agent-run requires --project-id, --model, and --prompt")
-        result = run_agent(root, args.project_id, args.model, args.prompt)
+        result = run_agent(root, args.project_id, args.model, args.prompt, args.skill_id)
     elif args.command == "agent-activity":
         if args.project_id is None:
             parser.error("agent-activity requires --project-id")
@@ -1137,12 +1175,21 @@ def main() -> None:
         if args.claim_id is None or args.claim_status is None:
             parser.error("set-claim-status requires --claim-id and --claim-status")
         result = set_claim_status(root, args.claim_id, args.claim_status)
+    elif args.command == "integration-probe":
+        result = probe_integrations(root, args.approved)
+    elif args.command == "mcp-call":
+        if args.project_id is None or args.mcp_server_id is None or args.mcp_tool_name is None:
+            parser.error("mcp-call requires --project-id, --mcp-server-id, and --mcp-tool-name")
+        mcp_arguments = json.loads(args.mcp_arguments)
+        if not isinstance(mcp_arguments, dict):
+            parser.error("mcp-call --mcp-arguments must be a JSON object")
+        result = invoke_mcp(root, args.project_id, args.mcp_server_id, args.mcp_tool_name, mcp_arguments, args.approved)
     elif args.command == "connectors":
         result = {"connectors": connector_catalog()}
     elif args.command == "skills":
-        result = {"skills": skill_catalog()}
+        result = {"skills": [*skill_catalog(), *discover_skills()]}
     elif args.command == "extensions":
-        result = {"extensions": extension_catalog()}
+        result = {"extensions": [*extension_catalog(), *discover_extensions()]}
     elif args.command == "export":
         if args.output is None:
             parser.error("export requires --output PATH")
