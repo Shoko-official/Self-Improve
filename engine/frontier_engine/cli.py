@@ -19,6 +19,7 @@ from frontier_engine.__main__ import doctor
 from frontier_engine.annotations import AnnotationStore
 from frontier_engine.agent_state import AgentStateStore
 from frontier_engine.agent_runner import run_local_agent
+from frontier_engine.automations import AutomationStore, pipeline_capabilities, run_pipeline
 from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
@@ -408,6 +409,108 @@ def _spawn_model_transfer_worker(root: Path, job_id: str) -> int:
     return process.pid
 
 
+def automation_catalog(root: Path, project_id: str | None = None) -> dict[str, object]:
+    store = AutomationStore(root / "automations.sqlite3")
+    try:
+        pipelines = store.pipelines(project_id)
+        pipeline_ids = {str(pipeline["id"]) for pipeline in pipelines}
+        runs = [run for run in store.run_records() if str(run["automation_id"]) in pipeline_ids]
+        return {"capabilities": pipeline_capabilities(), "pipelines": pipelines, "runs": runs}
+    finally:
+        store.close()
+
+
+def create_automation(root: Path, project_id: str, name: str, steps: list[dict[str, object]], schedule: dict[str, object]) -> dict[str, object]:
+    frontier = FrontierStore(root)
+    try:
+        frontier.require_active_project(project_id)
+    finally:
+        frontier.close()
+    store = AutomationStore(root / "automations.sqlite3")
+    try:
+        return store.create_pipeline(project_id, name, steps, schedule)
+    finally:
+        store.close()
+
+
+def start_automation(root: Path, automation_id: str, dry_run: bool = True, external_approved: bool = False, trigger_kind: str = "manual") -> dict[str, object]:
+    store = AutomationStore(root / "automations.sqlite3")
+    try:
+        record = store.queue_run(automation_id, dry_run, external_approved, trigger_kind)
+    finally:
+        store.close()
+    return record if dry_run else {**record, "worker_pid": _spawn_automation_worker(root, str(record["id"]))}
+
+
+def automation_run(root: Path, run_id: str) -> dict[str, object]:
+    store = AutomationStore(root / "automations.sqlite3")
+    try:
+        return store.run_record(run_id)
+    finally:
+        store.close()
+
+
+def cancel_automation(root: Path, run_id: str) -> dict[str, object]:
+    store = AutomationStore(root / "automations.sqlite3")
+    try:
+        return store.request_cancellation(run_id)
+    finally:
+        store.close()
+
+
+def retry_automation(root: Path, run_id: str, external_approved: bool = False) -> dict[str, object]:
+    store = AutomationStore(root / "automations.sqlite3")
+    try:
+        record = store.retry_run(run_id, external_approved)
+    finally:
+        store.close()
+    return {**record, "worker_pid": _spawn_automation_worker(root, str(record["id"]))}
+
+
+def run_due_automations(root: Path) -> dict[str, object]:
+    store = AutomationStore(root / "automations.sqlite3")
+    try:
+        due = store.due_pipelines()
+        queued = []
+        approval_required = []
+        for pipeline in due:
+            if pipeline["external_effects"]:
+                approval_required.append(pipeline["id"])
+            else:
+                record = store.queue_due_run(str(pipeline["id"]))
+                if record is not None:
+                    queued.append(record)
+    finally:
+        store.close()
+    started = [{**record, "worker_pid": _spawn_automation_worker(root, str(record["id"]))} for record in queued]
+    return {"started": started, "approval_required": approval_required}
+
+
+def _spawn_automation_worker(root: Path, run_id: str) -> int:
+    log_directory = root / "automation-logs"
+    log_directory.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, "-m", "frontier_engine.cli", "automation-run-worker", "--json", "--data-dir", str(root), "--automation-run-id", run_id]
+    options: dict[str, object] = {"cwd": str(Path.cwd()), "env": {**os.environ, "FRONTIER_DATA_DIR": str(root)}, "close_fds": True}
+    if os.name == "nt":
+        options["creationflags"] = subprocess.CREATE_NO_WINDOW
+    else:
+        options["start_new_session"] = True
+    try:
+        with (log_directory / f"{run_id}.log").open("ab") as log:
+            options["stdout"] = log
+            options["stderr"] = log
+            process = subprocess.Popen(command, **options)
+    except OSError as error:
+        store = AutomationStore(root / "automations.sqlite3")
+        try:
+            store.claim_run(run_id)
+            store.complete_run(run_id, "failed", {"code": "FR-AUTO-WORKER-START", "detail": str(error)})
+        finally:
+            store.close()
+        raise RuntimeError("FR-AUTO-WORKER-START") from error
+    return process.pid
+
+
 def execute_shell(root: Path, project_id: str, working_directory: Path, command: list[str], timeout_seconds: float) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -661,7 +764,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -709,6 +812,12 @@ def main() -> None:
     parser.add_argument("--shell-arg", action="append")
     parser.add_argument("--timeout-seconds", type=float, default=30)
     parser.add_argument("--job-id")
+    parser.add_argument("--automation-id")
+    parser.add_argument("--automation-run-id")
+    parser.add_argument("--steps-json")
+    parser.add_argument("--schedule-json", default='{"kind":"manual"}')
+    parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--external-approved", action="store_true")
     parser.add_argument("--generation-id")
     parser.add_argument("--runtime")
     parser.add_argument("--model")
@@ -893,6 +1002,34 @@ def main() -> None:
         if args.job_id is None:
             parser.error("retry-job requires --job-id")
         result = retry_job(root, args.job_id)
+    elif args.command == "automations":
+        result = automation_catalog(root, args.project_id)
+    elif args.command == "create-automation":
+        if args.project_id is None or args.name is None or args.steps_json is None:
+            parser.error("create-automation requires --project-id, --name, and --steps-json")
+        result = create_automation(root, args.project_id, args.name, json.loads(args.steps_json), json.loads(args.schedule_json))
+    elif args.command == "automation-start":
+        if args.automation_id is None:
+            parser.error("automation-start requires --automation-id")
+        result = start_automation(root, args.automation_id, not args.execute, args.external_approved)
+    elif args.command == "automation-status":
+        if args.automation_run_id is None:
+            parser.error("automation-status requires --automation-run-id")
+        result = automation_run(root, args.automation_run_id)
+    elif args.command == "automation-cancel":
+        if args.automation_run_id is None:
+            parser.error("automation-cancel requires --automation-run-id")
+        result = cancel_automation(root, args.automation_run_id)
+    elif args.command == "automation-retry":
+        if args.automation_run_id is None:
+            parser.error("automation-retry requires --automation-run-id")
+        result = retry_automation(root, args.automation_run_id, args.external_approved)
+    elif args.command == "automation-due":
+        result = run_due_automations(root)
+    elif args.command == "automation-run-worker":
+        if args.automation_run_id is None:
+            parser.error("automation-run-worker requires --automation-run-id")
+        result = run_pipeline(root, args.automation_run_id)
     elif args.command == "shell-exec":
         if args.project_id is None or args.working_directory is None or args.shell_arg is None:
             parser.error("shell-exec requires --project-id, --working-directory, and one or more --shell-arg values")

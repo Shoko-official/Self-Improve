@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ModelsSurface } from "./ModelsSurface";
+import { AutomationsSurface } from "./AutomationsSurface";
 import {
   Bot,
   Boxes,
@@ -29,6 +30,7 @@ import {
   ShieldCheck,
   Sun,
   TerminalSquare,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 import { surfaceText, type Language } from "./i18n";
@@ -44,7 +46,7 @@ type ArtifactRecord = { id: string; name: string; media_type: string; created_at
 type EnvironmentRecord = { name: string; language: string; executable: string | null; python_version: string | null; package_fingerprint: string | null; packages: Record<string, string>; };
 type AgentActivity = { project_id: string; plan: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string }; result: { error?: string; output_chars?: number } }>; };
 type KernelResult = { project_id: string; execution: { state: string; stdout: string; stderr: string; error?: string }; job: { id: string; state: string; diagnostic: { code: string } | null; events: Array<{ kind: string; created_at: string }> } };
-type Surface = "chat" | "workspaces" | "models" | "science" | "artifacts" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
+type Surface = "chat" | "workspaces" | "models" | "science" | "artifacts" | "automations" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
 type Theme = "light" | "dark";
 type NavigationItem = { id: Surface; icon: LucideIcon; en: string; fr: string };
 
@@ -54,6 +56,7 @@ const navigation: NavigationItem[] = [
   { id: "models", icon: Boxes, en: "Models", fr: "Modèles" },
   { id: "science", icon: FlaskConical, en: "Science", fr: "Science" },
   { id: "artifacts", icon: FileStack, en: "Artifacts", fr: "Artefacts" },
+  { id: "automations", icon: Workflow, en: "Automations", fr: "Automatisations" },
   { id: "mcp", icon: Cable, en: "MCP", fr: "MCP" },
   { id: "skills", icon: Library, en: "Skills", fr: "Skills" },
   { id: "extensions", icon: Puzzle, en: "Extensions", fr: "Extensions" },
@@ -172,9 +175,9 @@ export function App() {
           <p className="nav-label">{language === "fr" ? "Espace de travail" : "Workspace"}</p>
           {navigation.slice(0, 3).map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
           <p className="nav-label">{language === "fr" ? "Outils" : "Tools"}</p>
-          {navigation.slice(3, 8).map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
+          {navigation.slice(3, 9).map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
           <p className="nav-label">{language === "fr" ? "Système" : "System"}</p>
-          {navigation.slice(8).map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
+          {navigation.slice(9).map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
         </nav>
 
         <div className="project-shortlist">
@@ -238,6 +241,7 @@ export function App() {
             {surface === "models" && <ModelsSurface report={report} error={error} probe={probe} engineReport={engineReport} engineError={engineError} probeEngine={probeEngine} projects={projectRecords} language={language} />}
             {surface === "science" && <ScienceWorkbench projects={projectRecords} language={language} />}
             {surface === "artifacts" && <><ArtifactsSurface /><AnnotationSurface /></>}
+            {surface === "automations" && <AutomationsSurface projects={projectRecords} language={language} />}
             {surface === "mcp" && <RegistrySurface kind="connectors" language={language} />}
             {surface === "skills" && <RegistrySurface kind="skills" language={language} />}
             {surface === "extensions" && <RegistrySurface kind="extensions" language={language} />}
@@ -303,6 +307,7 @@ const slashCommands: SlashCommand[] = [
   { name: "/new", icon: Plus, en: "Clear the current draft and output", fr: "Effacer le brouillon et la sortie", action: "clear" },
   { name: "/projects", icon: FolderKanban, en: "Open local projects", fr: "Ouvrir les projets locaux", target: "workspaces" },
   { name: "/models", icon: Boxes, en: "Open model management", fr: "Ouvrir la gestion des modèles", target: "models" },
+  { name: "/automations", icon: Workflow, en: "Open local AI pipelines", fr: "Ouvrir les pipelines IA locaux", target: "automations" },
   { name: "/mcp", icon: Cable, en: "Inspect MCP connectors", fr: "Inspecter les connecteurs MCP", target: "mcp" },
   { name: "/skills", icon: Library, en: "Inspect installed skills", fr: "Inspecter les skills installés", target: "skills" },
   { name: "/extensions", icon: Puzzle, en: "Inspect executable extensions", fr: "Inspecter les extensions exécutables", target: "extensions" },

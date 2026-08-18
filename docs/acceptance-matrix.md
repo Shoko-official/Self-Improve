@@ -25,7 +25,7 @@
 | Diagnostics | partially_verified | Stable codes, evidence/fact separation, confidence-bounded inferences, and redaction are covered by `engine/tests/test_diagnostics.py` |
 | Benchmark | partially_verified | Raw samples, required environment fingerprints, summary metrics, and comparison deltas are covered by `engine/tests/test_benchmarks.py` |
 | Release gate | partially_verified | `scripts/release_gate.py` checks required files, acceptance-matrix areas, cross-platform CI configuration, and clean worktree evidence |
-| Automation | partially_verified | Durable definitions, dry-run history, and external-effect approval gates are covered by `engine/tests/test_automations.py` |
+| Automation | partially_verified | Typed DAG validation, model/skill/connector handlers, dependency outputs, bounded retries, cooperative cancellation, retry lineage, manual and interval schedules, dry-run history, per-run external approval, background workers, and the desktop editor are covered by `engine/tests/test_automations.py`; scheduled dispatch requires the desktop or CLI control loop to be running |
 | Operational UX | partially_verified | Durable lock-screen-safe notification records, deep links, and acknowledgement states are covered by `engine/tests/test_notifications.py` |
 | Remote providers | partially_verified | Provider-neutral credential handles and deterministic in-memory S3-compatible SigV4 signing are covered by `engine/tests/test_credentials.py` and `engine/tests/test_s3_signing.py`; no provider secret or live SDK endpoint is configured here |
 | OpenAI-compatible/NIM provider contracts | partially_verified | Real HTTP health, model discovery, streaming, and explicit egress-approval contracts are covered by `engine/tests/test_providers.py` |
