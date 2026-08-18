@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CircleAlert, Download, FileCheck2, Gauge, HardDrive, RefreshCw, Search, ShieldCheck, Square } from "lucide-react";
+import { CircleAlert, Cpu, Download, FileCheck2, Gauge, HardDrive, RefreshCw, Search, ShieldCheck, Square, Thermometer } from "lucide-react";
 import type { Language } from "./i18n";
 
 type CapabilityReport = { operatingSystem: string; architecture: string; logicalCores: number; capturedAt: number };
@@ -34,6 +34,29 @@ type ModelTransfer = {
   events: TransferEvent[];
 };
 type RuntimeInstallRecord = { id: string; state: string; result: { model: string } | null; diagnostic: { code: string } | null; events: Array<{ sequence_number: number; kind: string; detail: { output?: string } }> };
+type InferencePlan = {
+  supported: boolean;
+  models: string[];
+  missing_models: string[];
+  options: { num_ctx: number; num_batch: number; num_thread: number; num_gpu?: number };
+  keep_alive: string;
+  concurrency: number;
+  estimated_working_set_bytes: number;
+  memory_budget_bytes: number;
+  memory_source: "gpu" | "system";
+  automatic_cpu_fallback: boolean;
+  reasons: string[];
+  hardware: { logical_cores: number; system_memory_bytes: number | null; gpu_devices: Array<{ name: string; memory_bytes: number }>; gpu_memory_bytes: number };
+};
+type WarmupResult = {
+  plan: InferencePlan;
+  warmup: null | {
+    model: string;
+    keep_alive: string;
+    metrics: { total_duration?: number; load_duration?: number; tokens_per_second?: number };
+    loaded: { context_length?: number; size_vram?: number; expires_at?: string };
+  };
+};
 
 type ModelsSurfaceProps = {
   report: CapabilityReport | null;
@@ -67,6 +90,15 @@ export function latestProgress(transfer: ModelTransfer | null): ProgressDetail |
   return event?.detail ?? null;
 }
 
+export function parseOptionalInteger(value: string): number | null {
+  return value.trim() === "" ? null : Number.parseInt(value, 10);
+}
+
+export function formatNanoseconds(value: number | undefined, language: Language = "en"): string {
+  if (value === undefined) return language === "fr" ? "Inconnu" : "Unknown";
+  return `${(value / 1_000_000_000).toFixed(2)} s`;
+}
+
 export function ModelsSurface({ report, error, probe, engineReport, engineError, probeEngine, projects, language }: ModelsSurfaceProps) {
   const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
   const [query, setQuery] = useState("");
@@ -83,6 +115,17 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
   const [transfer, setTransfer] = useState<ModelTransfer | null>(null);
   const [ollamaModel, setOllamaModel] = useState("");
   const [ollamaInstall, setOllamaInstall] = useState<RuntimeInstallRecord | null>(null);
+  const [profileModels, setProfileModels] = useState("");
+  const [contextLength, setContextLength] = useState("");
+  const [cpuThreads, setCpuThreads] = useState("");
+  const [batchSize, setBatchSize] = useState("");
+  const [gpuLayers, setGpuLayers] = useState("");
+  const [keepAlive, setKeepAlive] = useState("15m");
+  const [concurrency, setConcurrency] = useState("1");
+  const [inferencePlan, setInferencePlan] = useState<InferencePlan | null>(null);
+  const [warmup, setWarmup] = useState<WarmupResult["warmup"]>(null);
+  const [inspectingInference, setInspectingInference] = useState(false);
+  const [warmingModel, setWarmingModel] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
   const progress = useMemo(() => latestProgress(transfer), [transfer]);
   const isTransferActive = transfer ? !terminalStates.has(transfer.state) : false;
@@ -181,6 +224,58 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
       setOllamaInstall(await invoke<RuntimeInstallRecord>("install_ollama_model_development", { projectId, model: ollamaModel }));
     } catch (reason) {
       setModelError(message(reason, language === "fr" ? "Le téléchargement Ollama n'a pas démarré." : "The Ollama pull did not start."));
+    }
+  }
+
+  function profileArguments() {
+    return {
+      models: profileModels.split(",").map(model => model.trim()).filter(Boolean),
+      contextLength: parseOptionalInteger(contextLength),
+      cpuThreads: parseOptionalInteger(cpuThreads),
+      batchSize: parseOptionalInteger(batchSize),
+      gpuLayers: parseOptionalInteger(gpuLayers),
+      keepAlive,
+      concurrency: parseOptionalInteger(concurrency),
+    };
+  }
+
+  async function inspectInference(event: FormEvent) {
+    event.preventDefault();
+    setInspectingInference(true);
+    setInferencePlan(null);
+    setWarmup(null);
+    setModelError(null);
+    try {
+      const result = await invoke<{ plan: InferencePlan }>("ollama_inference_plan_development", profileArguments());
+      setInferencePlan(result.plan);
+    } catch (reason) {
+      setModelError(message(reason, language === "fr" ? "Le profil d'inférence ne peut pas être calculé." : "The inference profile could not be calculated."));
+    } finally {
+      setInspectingInference(false);
+    }
+  }
+
+  async function warmupModel() {
+    if (!inferencePlan?.supported || inferencePlan.models.length !== 1) return;
+    setWarmingModel(true);
+    setWarmup(null);
+    setModelError(null);
+    try {
+      const profile = profileArguments();
+      const result = await invoke<WarmupResult>("warmup_ollama_model_development", {
+        model: inferencePlan.models[0],
+        contextLength: profile.contextLength,
+        cpuThreads: profile.cpuThreads,
+        batchSize: profile.batchSize,
+        gpuLayers: profile.gpuLayers,
+        keepAlive: profile.keepAlive,
+      });
+      setWarmup(result.warmup);
+      setInferencePlan(result.plan);
+    } catch (reason) {
+      setModelError(message(reason, language === "fr" ? "Le préchauffage Ollama a échoué." : "Ollama warmup failed."));
+    } finally {
+      setWarmingModel(false);
     }
   }
 
@@ -300,6 +395,47 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
         </form>
         {ollamaInstall && <div className="transfer-success"><FileCheck2 size={16} /><div><strong>{language === "fr" ? "Journal Ollama" : "Ollama record"}: {ollamaInstall.state}</strong><span>{ollamaInstall.result ? ollamaInstall.result.model : (ollamaInstall.diagnostic?.code ?? ollamaInstall.id)}</span></div></div>}
         <p className="development-note">{language === "fr" ? "Un fichier téléchargé reste non validé pour l'inférence tant qu'un runtime compatible ne l'a pas chargé." : "A downloaded file remains unvalidated for inference until a compatible runtime loads it."}</p>
+      </div>
+
+      <div className="engine-report model-runtime-section">
+        <div className="surface-mark">{language === "fr" ? "PROFIL MESURÉ" : "MEASURED PROFILE"}</div>
+        <h2>{language === "fr" ? "Planifier et préchauffer Ollama" : "Plan and warm up Ollama"}</h2>
+        <p>{language === "fr" ? "Le plan vérifie les modèles installés, la mémoire et les limites demandées avant tout chargement." : "The plan checks installed models, memory, and requested limits before loading anything."}</p>
+        <div className="inference-profile-grid">
+          <form className="project-form inference-profile-form" onSubmit={inspectInference}>
+            <label>{language === "fr" ? "Modèles exacts, séparés par une virgule" : "Exact models, comma separated"}<input value={profileModels} onChange={event => setProfileModels(event.target.value)} placeholder="qwen3" required /></label>
+            <div className="inference-field-grid">
+              <label>{language === "fr" ? "Contexte, auto si vide" : "Context, auto when empty"}<input type="number" min="512" max="262144" value={contextLength} onChange={event => setContextLength(event.target.value)} placeholder="4096" /></label>
+              <label>{language === "fr" ? "Threads CPU, auto si vide" : "CPU threads, auto when empty"}<input type="number" min="1" value={cpuThreads} onChange={event => setCpuThreads(event.target.value)} placeholder={report?.logicalCores.toString() ?? "8"} /></label>
+              <label>{language === "fr" ? "Lot, auto si vide" : "Batch, auto when empty"}<input type="number" min="1" max="2048" value={batchSize} onChange={event => setBatchSize(event.target.value)} placeholder="512" /></label>
+              <label>{language === "fr" ? "Couches GPU, auto si vide" : "GPU layers, auto when empty"}<input type="number" min="0" value={gpuLayers} onChange={event => setGpuLayers(event.target.value)} placeholder="auto" /></label>
+              <label>{language === "fr" ? "Conservation en mémoire" : "Keep in memory"}<input value={keepAlive} onChange={event => setKeepAlive(event.target.value)} placeholder="15m" required /></label>
+              <label>{language === "fr" ? "Requêtes parallèles" : "Parallel requests"}<input type="number" min="1" max="16" value={concurrency} onChange={event => setConcurrency(event.target.value)} required /></label>
+            </div>
+            <button className="minor-action" type="submit" disabled={inspectingInference}><Gauge size={14} />{inspectingInference ? (language === "fr" ? "Calcul" : "Calculating") : (language === "fr" ? "Calculer le profil" : "Calculate profile")}</button>
+          </form>
+
+          <section className="inference-ledger" aria-label={language === "fr" ? "Compatibilité d'inférence" : "Inference compatibility"}>
+            {!inferencePlan && <div className="transfer-empty"><Cpu size={22} /><h3>{language === "fr" ? "Aucun profil calculé" : "No calculated profile"}</h3><p>{language === "fr" ? "Le runtime et la mémoire seront sondés à la demande." : "Runtime and memory will be probed on demand."}</p></div>}
+            {inferencePlan && <>
+              <div className="model-section-heading"><Cpu size={17} /><div><span>{inferencePlan.memory_source === "gpu" ? "GPU" : "CPU"}</span><h3>{inferencePlan.supported ? (language === "fr" ? "Chargement compatible" : "Load supported") : (language === "fr" ? "Chargement refusé" : "Load refused")}</h3></div></div>
+              <dl>
+                <div><dt>{language === "fr" ? "Modèles" : "Models"}</dt><dd>{inferencePlan.models.join(", ")}</dd></div>
+                <div><dt>{language === "fr" ? "Mémoire estimée" : "Estimated memory"}</dt><dd>{formatBytes(inferencePlan.estimated_working_set_bytes, language)}</dd></div>
+                <div><dt>{language === "fr" ? "Budget sûr" : "Safe budget"}</dt><dd>{formatBytes(inferencePlan.memory_budget_bytes, language)}</dd></div>
+                <div><dt>{language === "fr" ? "Contexte" : "Context"}</dt><dd>{inferencePlan.options.num_ctx.toLocaleString()}</dd></div>
+                <div><dt>Batch</dt><dd>{inferencePlan.options.num_batch.toLocaleString()}</dd></div>
+                <div><dt>Threads</dt><dd>{inferencePlan.options.num_thread}</dd></div>
+                <div><dt>{language === "fr" ? "Parallélisme" : "Concurrency"}</dt><dd>{inferencePlan.concurrency}</dd></div>
+                {inferencePlan.automatic_cpu_fallback && <div><dt>Fallback</dt><dd>CPU</dd></div>}
+              </dl>
+              {!inferencePlan.supported && <p className="transfer-warning"><CircleAlert size={15} />{inferencePlan.reasons.join(", ")}</p>}
+              {inferencePlan.supported && inferencePlan.models.length === 1 && <button className="action" type="button" onClick={() => void warmupModel()} disabled={warmingModel}><Thermometer size={14} />{warmingModel ? (language === "fr" ? "Préchauffage" : "Warming up") : (language === "fr" ? "Préchauffer et vérifier" : "Warm up and verify")}</button>}
+              {inferencePlan.supported && inferencePlan.models.length > 1 && <p className="field-note">{language === "fr" ? "Le plan multi-modèle est compatible. Préchargez chaque modèle séparément pour conserver une preuve exacte." : "The multi-model plan is compatible. Warm each model separately to keep exact evidence."}</p>}
+              {warmup && <div className="transfer-success"><FileCheck2 size={16} /><div><strong>{language === "fr" ? "Modèle chargé et vérifié" : "Model loaded and verified"}</strong><span>{language === "fr" ? "Chargement" : "Load"}: {formatNanoseconds(warmup.metrics.load_duration, language)}</span><span>Total: {formatNanoseconds(warmup.metrics.total_duration, language)}</span><span>VRAM: {formatBytes(warmup.loaded.size_vram ?? null, language)}, ctx {warmup.loaded.context_length ?? inferencePlan.options.num_ctx}</span></div></div>}
+            </>}
+          </section>
+        </div>
       </div>
 
       {modelError && <div className="model-error" role="alert"><CircleAlert size={17} /><div><strong>{language === "fr" ? "Action interrompue" : "Action stopped"}</strong><p>{modelError}</p></div></div>}

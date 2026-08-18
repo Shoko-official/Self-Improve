@@ -22,7 +22,20 @@ class GenerationTests(unittest.TestCase):
         record = self.store.generation(generation_id)
         self.assertEqual(record["state"], "succeeded")
         self.assertEqual(record["output"], "hello world")
-        self.assertEqual(record["result"], {"chunk_count": 2, "output_chars": 11})
+        self.assertEqual(record["result"]["chunk_count"], 2)
+        self.assertEqual(record["result"]["output_chars"], 11)
+        self.assertGreaterEqual(record["result"]["wall_seconds"], record["result"]["time_to_first_chunk_seconds"])
+
+    def test_generation_persists_runtime_metrics(self) -> None:
+        class MeasuredStream:
+            metrics = {"load_duration": 12, "eval_count": 4, "tokens_per_second": 20.0}
+
+            def __iter__(self):
+                return iter(("measured",))
+
+        generation_id = self.store.create_generation(self.project_id, "ollama", "test-model", "Measure")
+        list(run_generation(self.store, generation_id, MeasuredStream()))
+        self.assertEqual(self.store.generation(generation_id)["result"]["runtime_metrics"]["tokens_per_second"], 20.0)
 
     def test_generation_cancellation_stops_before_next_chunk(self) -> None:
         generation_id = self.store.create_generation(self.project_id, "ollama", "test-model", "Stop")

@@ -444,10 +444,11 @@ class FrontierStore:
         model: str,
         prompt: str,
         session_id: str | None = None,
+        profile: Mapping[str, object] | None = None,
     ) -> str:
         if not runtime.strip() or not model.strip() or not prompt.strip():
             raise ValueError("Generation runtime, model, and prompt are required.")
-        job_id = self.create_job(project_id, "model.generate", {"runtime": runtime, "model": model, "prompt": prompt}, session_id)
+        job_id = self.create_job(project_id, "model.generate", {"runtime": runtime, "model": model, "prompt": prompt, "profile": dict(profile or {})}, session_id)
         generation_id = str(uuid.uuid4())
         self.connection.execute(
             "INSERT INTO generations(id, job_id, runtime, model, prompt, created_at) VALUES (?, ?, ?, ?, ?, ?)",

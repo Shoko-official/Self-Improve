@@ -283,6 +283,16 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .transfer-success strong { font-size: 12px; }
 .transfer-success span { margin-top: 4px; color: var(--text-faint); font: 10px/1.4 ui-monospace, "Cascadia Code", monospace; overflow-wrap: anywhere; }
 .model-runtime-section { margin-top: 32px; }
+.inference-profile-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(310px, .78fr); gap: 24px; align-items: start; margin-top: 20px; }
+.inference-profile-form { margin-top: 0; }
+.inference-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.inference-field-grid label { display: grid; gap: 8px; }
+.inference-ledger { min-width: 0; padding: 16px; background: var(--raised-bg); border: 1px solid var(--border-strong); border-radius: 12px; }
+.inference-ledger dl { display: grid; margin: 16px 0; }
+.inference-ledger dl div { display: grid; grid-template-columns: minmax(90px, .8fr) minmax(0, 1.2fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.inference-ledger dt { color: var(--text-faint); font-size: 10px; }
+.inference-ledger dd { min-width: 0; margin: 0; font: 10px/1.45 ui-monospace, "Cascadia Code", monospace; overflow-wrap: anywhere; text-align: right; }
+.inference-ledger .action { margin-top: 2px; }
 .model-error { display: flex; align-items: flex-start; gap: 9px; margin-top: 20px; padding: 12px; color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 9px; }
 .model-error svg { flex: 0 0 auto; }
 .model-error strong { font-size: 12px; }
@@ -301,7 +311,11 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
   .registry-row { grid-template-columns: 34px minmax(0, 1fr); }
   .registry-row dl { grid-column: 2; }
   .model-workflow-grid { grid-template-columns: 1fr; }
+  .inference-profile-grid { grid-template-columns: 1fr; }
   .transfer-ledger { position: static; }
+}
+@media (max-width: 640px) {
+  .model-field-pair, .inference-field-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; }
