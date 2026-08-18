@@ -293,6 +293,58 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .inference-ledger dt { color: var(--text-faint); font-size: 10px; }
 .inference-ledger dd { min-width: 0; margin: 0; font: 10px/1.45 ui-monospace, "Cascadia Code", monospace; overflow-wrap: anywhere; text-align: right; }
 .inference-ledger .action { margin-top: 2px; }
+.automation-layout { display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(330px, .92fr); gap: 24px; align-items: start; margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--border); }
+.automation-editor, .automation-ledger { min-width: 0; padding: 16px; background: var(--raised-bg); border: 1px solid var(--border-strong); border-radius: 12px; }
+.automation-editor { display: grid; gap: 10px; }
+.automation-editor label { display: grid; gap: 7px; color: var(--text-soft); font-size: 11px; font-weight: 650; }
+.automation-editor input, .automation-editor select, .automation-editor textarea { width: 100%; min-width: 0; padding: 8px 9px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 7px; }
+.automation-editor textarea { min-height: 68px; resize: vertical; line-height: 1.45; }
+.automation-heading { display: flex; align-items: flex-start; gap: 9px; }
+.automation-heading > svg { flex: 0 0 auto; color: var(--accent); }
+.automation-heading > div { min-width: 0; flex: 1; }
+.automation-heading span { display: block; color: var(--text-faint); font-size: 9px; font-weight: 700; letter-spacing: .07em; }
+.automation-heading h3 { margin: 2px 0 0; font-size: 13px; }
+.automation-heading .icon-button { margin-left: auto; }
+.automation-schedule, .automation-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.automation-steps { display: grid; gap: 10px; margin-top: 4px; }
+.automation-step { display: grid; gap: 9px; padding: 12px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 9px; }
+.automation-step-head { display: flex; gap: 8px; align-items: center; }
+.automation-step-head > span { display: grid; width: 21px; height: 21px; place-items: center; color: var(--text-faint); background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 6px; font: 10px ui-monospace, "Cascadia Code", monospace; }
+.automation-step-head strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+.automation-editor > .minor-action, .automation-editor > .action { margin: 0; justify-content: center; }
+.pipeline-list { display: grid; gap: 6px; margin-top: 14px; }
+.pipeline-list button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; padding: 9px 10px; text-align: left; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; }
+.pipeline-list button[aria-pressed="true"] { background: var(--selected-bg); border-color: var(--border-strong); }
+.pipeline-list span, .pipeline-list strong, .pipeline-list small { display: block; min-width: 0; }
+.pipeline-list strong { overflow: hidden; text-overflow: ellipsis; font-size: 11px; white-space: nowrap; }
+.pipeline-list small { margin-top: 3px; color: var(--text-faint); font-size: 9px; }
+.pipeline-list svg { flex: 0 0 auto; color: var(--text-faint); }
+.pipeline-detail { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pipeline-meta { display: flex; justify-content: space-between; gap: 12px; color: var(--text-faint); font-size: 9px; }
+.pipeline-meta span { display: flex; align-items: center; gap: 5px; }
+.pipeline-detail ol { display: grid; gap: 0; margin: 12px 0; padding: 0; list-style: none; counter-reset: steps; }
+.pipeline-detail ol li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 10px; }
+.pipeline-detail code { color: var(--accent); }
+.pipeline-detail small { color: var(--text-faint); }
+.approval-check { display: flex; gap: 8px; align-items: flex-start; padding: 9px; color: var(--text-soft); background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; font-size: 10px; line-height: 1.4; }
+.approval-check input { flex: 0 0 auto; margin-top: 1px; }
+.pipeline-actions { display: flex; gap: 7px; margin-top: 10px; }
+.pipeline-actions button { flex: 1; justify-content: center; margin: 0; }
+.pipeline-history { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pipeline-history > span { grid-column: 1 / -1; color: var(--text-faint); font-size: 9px; font-weight: 700; letter-spacing: .07em; }
+.pipeline-history button { min-width: 0; padding: 7px 8px; text-align: left; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 7px; }
+.pipeline-history button[aria-pressed="true"] { background: var(--selected-bg); border-color: var(--border-strong); }
+.pipeline-history strong, .pipeline-history small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-history strong { font-size: 10px; }
+.pipeline-history small { margin-top: 3px; color: var(--text-faint); font-size: 8px; }
+.pipeline-run { margin-top: 16px; padding: 12px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 9px; }
+.pipeline-run ul { display: grid; margin: 10px 0; padding: 0; list-style: none; }
+.pipeline-run li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 10px; }
+.pipeline-run li small { grid-column: 1 / -1; color: var(--danger); }
+.pipeline-run details { grid-column: 1 / -1; min-width: 0; }
+.pipeline-run summary { color: var(--text-faint); cursor: pointer; }
+.pipeline-run pre { max-height: 180px; margin: 7px 0 0; padding: 8px; overflow: auto; color: var(--text-soft); background: var(--code-bg); border: 1px solid var(--border); border-radius: 7px; white-space: pre-wrap; overflow-wrap: anywhere; font: 9px/1.45 ui-monospace, "Cascadia Code", monospace; }
+.pipeline-run .minor-action { margin-bottom: 0; }
 .model-error { display: flex; align-items: flex-start; gap: 9px; margin-top: 20px; padding: 12px; color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 9px; }
 .model-error svg { flex: 0 0 auto; }
 .model-error strong { font-size: 12px; }
@@ -312,10 +364,11 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
   .registry-row dl { grid-column: 2; }
   .model-workflow-grid { grid-template-columns: 1fr; }
   .inference-profile-grid { grid-template-columns: 1fr; }
+  .automation-layout { grid-template-columns: 1fr; }
   .transfer-ledger { position: static; }
 }
 @media (max-width: 640px) {
-  .model-field-pair, .inference-field-grid { grid-template-columns: 1fr; }
+  .model-field-pair, .inference-field-grid, .automation-schedule, .automation-field-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; }
