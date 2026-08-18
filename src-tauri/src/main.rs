@@ -182,9 +182,32 @@ fn download_huggingface_model_development(repository_id: String, filename: Strin
 
 #[tauri::command]
 fn plan_huggingface_model_download_development(repository_id: String, filename: String, destination: String, revision: Option<String>) -> Result<serde_json::Value, String> {
-    let mut arguments = vec!["model-download-plan".to_owned(), "--repository-id".to_owned(), repository_id, "--filename".to_owned(), filename, "--destination".to_owned(), destination];
+    let mut arguments = vec!["model-download-plan".to_owned(), "--repository-id".to_owned(), repository_id, "--filename".to_owned(), filename, "--destination".to_owned(), destination, "--interactive".to_owned()];
     if let Some(revision) = revision { arguments.extend(["--revision".to_owned(), revision]); }
     run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn start_huggingface_model_transfer_development(project_id: String, repository_id: String, filename: String, destination: String, revision: Option<String>, expected_sha256: Option<String>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["model-download-start".to_owned(), "--project-id".to_owned(), project_id, "--repository-id".to_owned(), repository_id, "--filename".to_owned(), filename, "--destination".to_owned(), destination];
+    if let Some(revision) = revision { arguments.extend(["--revision".to_owned(), revision]); }
+    if let Some(expected_sha256) = expected_sha256 { arguments.extend(["--expected-sha256".to_owned(), expected_sha256]); }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn huggingface_model_transfer_status_development(job_id: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["model-download-status".to_owned(), "--job-id".to_owned(), job_id])
+}
+
+#[tauri::command]
+fn cancel_huggingface_model_transfer_development(job_id: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["cancel-job".to_owned(), "--job-id".to_owned(), job_id])
+}
+
+#[tauri::command]
+fn retry_huggingface_model_transfer_development(job_id: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&["model-download-retry".to_owned(), "--job-id".to_owned(), job_id])
 }
 
 #[tauri::command]
@@ -364,7 +387,7 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, retry_compute_job_development, local_generations_development, kernel_execute_development, kernel_restart_development, local_agent_activity_development, run_local_agent_development, search_huggingface_models_development, plan_huggingface_model_download_development, download_huggingface_model_development, install_ollama_model_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, project_annotations_development, create_project_annotation_development, review_scientific_claims_development, scientific_connectors_development, scientific_skills_development, extensions_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development, create_python_environment_development, install_environment_packages_development, create_r_environment_development, install_r_environment_packages_development, render_artifact_preview_development, storage_transfer_development, remote_compute_development])
+        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, retry_compute_job_development, local_generations_development, kernel_execute_development, kernel_restart_development, local_agent_activity_development, run_local_agent_development, search_huggingface_models_development, plan_huggingface_model_download_development, download_huggingface_model_development, start_huggingface_model_transfer_development, huggingface_model_transfer_status_development, cancel_huggingface_model_transfer_development, retry_huggingface_model_transfer_development, install_ollama_model_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, project_annotations_development, create_project_annotation_development, review_scientific_claims_development, scientific_connectors_development, scientific_skills_development, extensions_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development, create_python_environment_development, install_environment_packages_development, create_r_environment_development, install_r_environment_packages_development, render_artifact_preview_development, storage_transfer_development, remote_compute_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
 }

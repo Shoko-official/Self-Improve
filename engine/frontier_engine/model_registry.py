@@ -40,7 +40,7 @@ class HuggingFaceHub:
             raise HuggingFaceHubError("FR-HF-SEARCH: Hub returned a non-list response")
         return [{key: item.get(key) for key in ("modelId", "sha", "lastModified", "downloads", "likes", "library_name", "tags")} for item in payload if isinstance(item, dict) and isinstance(item.get("modelId"), str)]
 
-    def download_plan(self, repository_id: str, filename: str, destination: Path, revision: str = "main") -> dict[str, object]:
+    def download_plan(self, repository_id: str, filename: str, destination: Path, revision: str = "main", interactive: bool = False) -> dict[str, object]:
         url = self._download_url(repository_id, filename, revision)
         destination = destination.resolve()
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -54,7 +54,7 @@ class HuggingFaceHub:
             raise HuggingFaceHubError(f"FR-HF-PLAN: {error}") from error
         free_bytes = shutil.disk_usage(destination.parent).free
         xet_available = self._xet_available()
-        accelerator = "huggingface-cache" if xet_available else "parallel-http" if accepts_ranges and content_length is not None and content_length >= 4 * 1024 * 1024 else "http"
+        accelerator = "huggingface-cache" if xet_available and not interactive else "parallel-http" if accepts_ranges and content_length is not None and content_length >= 4 * 1024 * 1024 else "http"
         required_free_bytes = content_length * 2 if content_length is not None and accelerator == "parallel-http" else content_length
         return {
             "repository_id": repository_id,
@@ -70,6 +70,7 @@ class HuggingFaceHub:
             "fits": required_free_bytes is None or free_bytes >= required_free_bytes,
             "accelerator": accelerator,
             "xet_available": xet_available,
+            "interactive": interactive,
         }
 
     def download_file(self, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None, cancel_requested: Callable[[], bool] | None = None, progress: Callable[[int, int | None], None] | None = None, workers: int = 4) -> dict[str, object]:
@@ -81,10 +82,11 @@ class HuggingFaceHub:
         destination.parent.mkdir(parents=True, exist_ok=True)
         url = self._download_url(repository_id, filename, revision)
         started = time.monotonic()
-        plan = self.download_plan(repository_id, filename, destination, revision)
+        interactive = cancel_requested is not None or progress is not None
+        plan = self.download_plan(repository_id, filename, destination, revision, interactive)
         if plan["bytes"] is not None and not plan["fits"]:
             raise HuggingFaceHubError("FR-HF-DISK-SPACE")
-        if self._xet_available() and cancel_requested is None and progress is None:
+        if plan["accelerator"] == "huggingface-cache":
             transfer = self._download_with_hf_cache(repository_id, filename, destination, revision, expected_sha256)
             transfer["elapsed_seconds"] = time.monotonic() - started
             transfer["bytes_per_second"] = int(transfer["bytes"] / max(float(transfer["elapsed_seconds"]), 0.001))
@@ -166,6 +168,8 @@ class HuggingFaceHub:
                 for part in parts:
                     with part.open("rb") as source:
                         for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                            if cancel_requested is not None and cancel_requested():
+                                raise HuggingFaceHubError("FR-HF-DOWNLOAD-CANCELLED")
                             target.write(chunk)
                             digest.update(chunk)
                             received += len(chunk)
@@ -247,7 +251,9 @@ class ModelRegistry:
     def register(self, path: Path) -> dict[str, object]:
         path = path.resolve()
         if not path.is_file(): raise FileNotFoundError(f"Model file not found: {path}")
-        digest = _sha256_file(path)
+        return self._register_verified(path, _sha256_file(path))
+
+    def _register_verified(self, path: Path, digest: str) -> dict[str, object]:
         extension = path.suffix.removeprefix(".").lower() or "unknown"
         record = {"id": str(uuid.uuid4()), "path": str(path), "sha256": digest, "bytes": path.stat().st_size, "format": extension, "capability_state": "unvalidated"}
         self.connection.execute("INSERT INTO local_models VALUES (:id, :path, :sha256, :bytes, :format, :capability_state)", record); self.connection.commit()
@@ -256,9 +262,11 @@ class ModelRegistry:
     def list(self) -> list[dict[str, object]]:
         return [dict(row) for row in self.connection.execute("SELECT * FROM local_models ORDER BY path")]
 
-    def download_and_register(self, hub: HuggingFaceHub, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None, cancel_requested: Callable[[], bool] | None = None) -> dict[str, object]:
-        transfer = hub.download_file(repository_id, filename, destination, revision, expected_sha256, cancel_requested)
-        return {"transfer": transfer, "model": self.register(destination)}
+    def download_and_register(self, hub: HuggingFaceHub, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None, cancel_requested: Callable[[], bool] | None = None, progress: Callable[[int, int | None], None] | None = None, registration_allowed: Callable[[], bool] | None = None) -> dict[str, object]:
+        transfer = hub.download_file(repository_id, filename, destination, revision, expected_sha256, cancel_requested, progress)
+        if (cancel_requested is not None and cancel_requested()) or (registration_allowed is not None and not registration_allowed()):
+            raise HuggingFaceHubError("FR-HF-DOWNLOAD-CANCELLED")
+        return {"transfer": transfer, "model": self._register_verified(destination.resolve(), str(transfer["sha256"]))}
 
 
 def _sha256_file(path: Path) -> str:
