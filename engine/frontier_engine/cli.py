@@ -318,6 +318,10 @@ def search_huggingface_models(query: str, limit: int = 10) -> dict[str, object]:
     return {"query": query, "models": HuggingFaceHub().search_models(query, limit)}
 
 
+def plan_huggingface_model_download(repository_id: str, filename: str, destination: Path, revision: str = "main") -> dict[str, object]:
+    return {"plan": HuggingFaceHub().download_plan(repository_id, filename, destination, revision)}
+
+
 def download_huggingface_model(root: Path, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None) -> dict[str, object]:
     registry = ModelRegistry(root / "models.sqlite3")
     try:
@@ -579,7 +583,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download-plan", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -833,6 +837,10 @@ def main() -> None:
         if args.query is None:
             parser.error("model-search requires --query")
         result = search_huggingface_models(args.query, args.limit)
+    elif args.command == "model-download-plan":
+        if args.repository_id is None or args.filename is None or args.destination is None:
+            parser.error("model-download-plan requires --repository-id, --filename, and --destination")
+        result = plan_huggingface_model_download(args.repository_id, args.filename, args.destination, args.revision)
     elif args.command == "model-download":
         if args.repository_id is None or args.filename is None or args.destination is None:
             parser.error("model-download requires --repository-id, --filename, and --destination")

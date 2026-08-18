@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, project_folders, projects, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
+from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, plan_huggingface_model_download, project_folders, projects, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -133,7 +133,9 @@ class CliTests(unittest.TestCase):
     def test_huggingface_commands_keep_network_transfer_explicit(self) -> None:
         with patch("frontier_engine.cli.HuggingFaceHub") as hub_type:
             hub_type.return_value.search_models.return_value = [{"modelId": "org/model"}]
+            hub_type.return_value.download_plan.return_value = {"bytes": 42, "fits": True}
             self.assertEqual(search_huggingface_models("model")["models"][0]["modelId"], "org/model")
+            self.assertTrue(plan_huggingface_model_download("org/model", "model.gguf", Path("model.gguf"))["plan"]["fits"])
 
     def test_connector_and_skill_catalogs_are_available_to_desktop_clients(self) -> None:
         connectors = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "connectors", "--json"], capture_output=True, check=True, text=True)
