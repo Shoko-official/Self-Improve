@@ -23,6 +23,7 @@ from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
 from frontier_engine.model_registry import HuggingFaceHub, ModelRegistry
+from frontier_engine.model_transfers import MODEL_TRANSFER_OPERATION, create_model_transfer, run_model_transfer
 from frontier_engine.environments import create_python_environment, create_r_environment, install_python_packages, install_r_packages, list_manifests, probe_environment
 from frontier_engine.generation import run_generation
 from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
@@ -318,8 +319,8 @@ def search_huggingface_models(query: str, limit: int = 10) -> dict[str, object]:
     return {"query": query, "models": HuggingFaceHub().search_models(query, limit)}
 
 
-def plan_huggingface_model_download(repository_id: str, filename: str, destination: Path, revision: str = "main") -> dict[str, object]:
-    return {"plan": HuggingFaceHub().download_plan(repository_id, filename, destination, revision)}
+def plan_huggingface_model_download(repository_id: str, filename: str, destination: Path, revision: str = "main", interactive: bool = False) -> dict[str, object]:
+    return {"plan": HuggingFaceHub().download_plan(repository_id, filename, destination, revision, interactive)}
 
 
 def download_huggingface_model(root: Path, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None) -> dict[str, object]:
@@ -328,6 +329,65 @@ def download_huggingface_model(root: Path, repository_id: str, filename: str, de
         return registry.download_and_register(HuggingFaceHub(), repository_id, filename, destination, revision, expected_sha256)
     finally:
         registry.close()
+
+
+def start_huggingface_model_transfer(root: Path, project_id: str, repository_id: str, filename: str, destination: Path, revision: str = "main", expected_sha256: str | None = None) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        record = create_model_transfer(store, HuggingFaceHub(), project_id, repository_id, filename, destination, revision, expected_sha256)
+    finally:
+        store.close()
+    worker_pid = _spawn_model_transfer_worker(root, str(record["id"]))
+    return {**record, "worker_pid": worker_pid}
+
+
+def huggingface_model_transfer(root: Path, job_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        record = store.job(job_id)
+        if record["operation"] != MODEL_TRANSFER_OPERATION:
+            raise ValueError("Job is not a Hugging Face model transfer.")
+        return record
+    finally:
+        store.close()
+
+
+def retry_huggingface_model_transfer(root: Path, job_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        original = store.job(job_id)
+        if original["operation"] != MODEL_TRANSFER_OPERATION:
+            raise ValueError("Job is not a Hugging Face model transfer.")
+        record = store.retry_job(job_id)
+    finally:
+        store.close()
+    worker_pid = _spawn_model_transfer_worker(root, str(record["id"]))
+    return {**record, "worker_pid": worker_pid}
+
+
+def _spawn_model_transfer_worker(root: Path, job_id: str) -> int:
+    log_directory = root / "model-transfer-logs"
+    log_directory.mkdir(parents=True, exist_ok=True)
+    command = [sys.executable, "-m", "frontier_engine.cli", "model-download-run", "--json", "--data-dir", str(root), "--job-id", job_id]
+    options: dict[str, object] = {"cwd": str(Path.cwd()), "env": {**os.environ, "FRONTIER_DATA_DIR": str(root)}, "close_fds": True}
+    if os.name == "nt":
+        options["creationflags"] = subprocess.CREATE_NO_WINDOW
+    else:
+        options["start_new_session"] = True
+    try:
+        with (log_directory / f"{job_id}.log").open("ab") as log:
+            options["stdout"] = log
+            options["stderr"] = log
+            process = subprocess.Popen(command, **options)
+    except OSError as error:
+        store = FrontierStore(root)
+        try:
+            store.claim_job(job_id)
+            store.fail_job(job_id, {"code": "FR-HF-TRANSFER-START", "detail": str(error)})
+        finally:
+            store.close()
+        raise RuntimeError("FR-HF-TRANSFER-START") from error
+    return process.pid
 
 
 def execute_shell(root: Path, project_id: str, working_directory: Path, command: list[str], timeout_seconds: float) -> dict[str, object]:
@@ -583,7 +643,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download-plan", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "agent-workspace", "agent-run", "agent-activity", "shell-exec", "generations", "generate-local", "install-ollama-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -638,6 +698,7 @@ def main() -> None:
     parser.add_argument("--filename")
     parser.add_argument("--revision", default="main")
     parser.add_argument("--expected-sha256")
+    parser.add_argument("--interactive", action="store_true")
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--prompt")
     parser.add_argument("--artifact-id")
@@ -840,7 +901,23 @@ def main() -> None:
     elif args.command == "model-download-plan":
         if args.repository_id is None or args.filename is None or args.destination is None:
             parser.error("model-download-plan requires --repository-id, --filename, and --destination")
-        result = plan_huggingface_model_download(args.repository_id, args.filename, args.destination, args.revision)
+        result = plan_huggingface_model_download(args.repository_id, args.filename, args.destination, args.revision, args.interactive)
+    elif args.command == "model-download-start":
+        if args.project_id is None or args.repository_id is None or args.filename is None or args.destination is None:
+            parser.error("model-download-start requires --project-id, --repository-id, --filename, and --destination")
+        result = start_huggingface_model_transfer(root, args.project_id, args.repository_id, args.filename, args.destination, args.revision, args.expected_sha256)
+    elif args.command == "model-download-status":
+        if args.job_id is None:
+            parser.error("model-download-status requires --job-id")
+        result = huggingface_model_transfer(root, args.job_id)
+    elif args.command == "model-download-retry":
+        if args.job_id is None:
+            parser.error("model-download-retry requires --job-id")
+        result = retry_huggingface_model_transfer(root, args.job_id)
+    elif args.command == "model-download-run":
+        if args.job_id is None:
+            parser.error("model-download-run requires --job-id")
+        result = run_model_transfer(root, args.job_id)
     elif args.command == "model-download":
         if args.repository_id is None or args.filename is None or args.destination is None:
             parser.error("model-download requires --repository-id, --filename, and --destination")

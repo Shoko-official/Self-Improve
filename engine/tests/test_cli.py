@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, import_data, install_ollama_model, jobs, plan_huggingface_model_download, project_folders, projects, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, status, workspace_tool
+from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, plan_huggingface_model_download, project_folders, projects, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -136,6 +136,28 @@ class CliTests(unittest.TestCase):
             hub_type.return_value.download_plan.return_value = {"bytes": 42, "fits": True}
             self.assertEqual(search_huggingface_models("model")["models"][0]["modelId"], "org/model")
             self.assertTrue(plan_huggingface_model_download("org/model", "model.gguf", Path("model.gguf"))["plan"]["fits"])
+
+    def test_huggingface_transfer_start_status_and_retry_are_durable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project_id = create_project(root, "Transfer")["id"]
+            plan = {"bytes": 42, "fits": True, "accelerator": "parallel-http"}
+            with patch("frontier_engine.cli.HuggingFaceHub") as hub_type, patch("frontier_engine.cli._spawn_model_transfer_worker", return_value=123) as spawn:
+                hub_type.return_value.download_plan.return_value = plan
+                queued = start_huggingface_model_transfer(root, project_id, "org/model", "model.gguf", root / "model.gguf")
+                self.assertEqual(queued["state"], "queued")
+                self.assertEqual(huggingface_model_transfer(root, queued["id"])["request"]["plan"], plan)
+                status_result = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "model-download-status", "--job-id", queued["id"], "--data-dir", str(root), "--json"], capture_output=True, check=True, text=True)
+                self.assertEqual(json.loads(status_result.stdout)["id"], queued["id"])
+                store = FrontierStore(root)
+                try:
+                    store.claim_job(queued["id"])
+                    store.fail_job(queued["id"], {"code": "fixture"})
+                finally:
+                    store.close()
+                retry = retry_huggingface_model_transfer(root, queued["id"])
+                self.assertEqual(retry["parent_job_id"], queued["id"])
+                self.assertEqual(spawn.call_count, 2)
 
     def test_connector_and_skill_catalogs_are_available_to_desktop_clients(self) -> None:
         connectors = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "connectors", "--json"], capture_output=True, check=True, text=True)

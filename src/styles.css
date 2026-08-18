@@ -238,6 +238,56 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .agent-error { color: var(--danger) !important; }
 .development-note { margin-top: 14px !important; padding: 10px; background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; }
 
+.models-surface { width: min(1120px, calc(100% - 56px)); }
+.model-host-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 22px; }
+.model-host-grid > section { padding: 14px; background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 10px; }
+.model-host-grid p { margin: 9px 0 0; color: var(--text-soft); font-size: 12px; overflow-wrap: anywhere; }
+.model-section-heading { display: flex; align-items: center; gap: 9px; }
+.model-section-heading > svg { flex: 0 0 auto; color: var(--accent); }
+.model-section-heading span { display: block; color: var(--text-faint); font-size: 9px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.model-section-heading h3 { margin: 2px 0 0; font-size: 13px; }
+.model-workflow-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(310px, .8fr); gap: 24px; align-items: start; margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
+.model-source-column { min-width: 0; }
+.model-inline-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+.model-inline-form .minor-action { margin: 0; }
+.model-results { max-height: 240px; margin-top: 8px; overflow: auto; border: 1px solid var(--border); border-radius: 9px; }
+.model-results > p { margin: 0; padding: 18px; color: var(--text-soft); font-size: 12px; text-align: center; }
+.model-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; border-bottom: 1px solid var(--border); }
+.model-result:last-child { border-bottom: 0; }
+.model-result strong, .model-result span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-result strong { font-size: 12px; }
+.model-result span { margin-top: 3px; color: var(--text-faint); font-size: 10px; }
+.model-result .minor-action { margin: 0; padding: 5px 8px; font-size: 11px; }
+.model-transfer-form { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.model-field-pair { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(110px, .7fr); gap: 8px; }
+.model-field-pair label { display: grid; gap: 8px; }
+.field-note { margin: -2px 0 2px; color: var(--text-faint); font-size: 11px; }
+.transfer-ledger { position: sticky; top: 18px; min-width: 0; padding: 16px; background: var(--raised-bg); border: 1px solid var(--border-strong); border-radius: 12px; }
+.transfer-empty { padding: 46px 16px; color: var(--text-soft); text-align: center; }
+.transfer-empty svg { color: var(--text-faint); }
+.transfer-empty h3 { margin: 10px 0 6px; color: var(--text); font-size: 14px; }
+.transfer-empty p { margin: 0 auto; max-width: 32ch; font-size: 12px; line-height: 1.5; }
+.transfer-plan dl, .transfer-progress dl { display: grid; gap: 0; margin: 16px 0 0; }
+.transfer-plan dl div, .transfer-progress dl div { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.transfer-plan dt, .transfer-progress dt { color: var(--text-faint); font-size: 10px; }
+.transfer-plan dd, .transfer-progress dd { min-width: 0; margin: 0; font: 10px/1.45 ui-monospace, "Cascadia Code", monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.transfer-progress progress { width: 100%; height: 8px; margin-top: 20px; accent-color: var(--accent); }
+.transfer-numbers { display: flex; justify-content: space-between; gap: 12px; margin-top: 7px; font-size: 11px; }
+.transfer-numbers span { color: var(--text-faint); text-align: right; }
+.transfer-warning { display: flex; align-items: flex-start; gap: 7px; margin: 14px 0 0; padding: 9px; color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 8px; font-size: 11px; line-height: 1.45; }
+.transfer-warning svg { flex: 0 0 auto; }
+.danger-action { color: var(--danger); border-color: var(--danger); }
+.transfer-success { display: flex; align-items: flex-start; gap: 9px; margin-top: 16px; padding: 11px; background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 9px; }
+.transfer-success > svg { flex: 0 0 auto; color: var(--accent); }
+.transfer-success strong, .transfer-success span { display: block; }
+.transfer-success strong { font-size: 12px; }
+.transfer-success span { margin-top: 4px; color: var(--text-faint); font: 10px/1.4 ui-monospace, "Cascadia Code", monospace; overflow-wrap: anywhere; }
+.model-runtime-section { margin-top: 32px; }
+.model-error { display: flex; align-items: flex-start; gap: 9px; margin-top: 20px; padding: 12px; color: var(--danger); background: var(--danger-soft); border: 1px solid var(--danger); border-radius: 9px; }
+.model-error svg { flex: 0 0 auto; }
+.model-error strong { font-size: 12px; }
+.model-error p { margin: 3px 0 0; font-size: 11px; line-height: 1.45; }
+
 @media (max-width: 1180px) {
   .workspace-grid { grid-template-columns: minmax(0, 1fr) 244px; }
   .science-workbench { grid-template-columns: minmax(360px, .85fr) minmax(430px, 1.15fr); }
@@ -250,6 +300,8 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
   .science-workbench { grid-template-columns: 1fr 1fr; }
   .registry-row { grid-template-columns: 34px minmax(0, 1fr); }
   .registry-row dl { grid-column: 2; }
+  .model-workflow-grid { grid-template-columns: 1fr; }
+  .transfer-ledger { position: static; }
 }
 @media (prefers-reduced-motion: reduce) {
   .spin { animation: none; }

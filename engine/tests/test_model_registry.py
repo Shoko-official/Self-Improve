@@ -5,6 +5,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 
 from frontier_engine.model_registry import HuggingFaceHub, HuggingFaceHubError, ModelRegistry
 
@@ -117,6 +118,23 @@ class ModelRegistryTests(unittest.TestCase):
             self.assertGreater(record["segments"], 1)
             self.assertEqual(destination.read_bytes(), Handler.large_content)
             self.assertTrue(progress)
+
+    def test_interactive_plan_reports_the_backend_it_will_use(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch.object(self.hub, "_xet_available", return_value=True):
+            destination = Path(directory) / "large.gguf"
+            self.assertEqual(self.hub.download_plan("org/model", "large.gguf", destination)["accelerator"], "huggingface-cache")
+            interactive = self.hub.download_plan("org/model", "large.gguf", destination, interactive=True)
+            self.assertEqual(interactive["accelerator"], "parallel-http")
+            self.assertTrue(interactive["interactive"])
+
+    def test_cancel_before_registration_keeps_the_registry_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); destination = root / "model.gguf"
+            registry = ModelRegistry(root / "models.sqlite3")
+            with self.assertRaisesRegex(HuggingFaceHubError, "CANCELLED"):
+                registry.download_and_register(self.hub, "org/model", "model.gguf", destination, registration_allowed=lambda: False)
+            self.assertEqual(registry.list(), [])
+            registry.close()
 
     def test_parallel_download_resumes_retained_segments_after_cancellation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
