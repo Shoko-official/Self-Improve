@@ -167,7 +167,8 @@ class CliTests(unittest.TestCase):
 
     def test_extension_catalog_hides_unexecutable_extensions(self) -> None:
         extensions = subprocess.run([sys.executable, "-m", "frontier_engine.cli", "extensions", "--json"], capture_output=True, check=True, text=True)
-        self.assertEqual(json.loads(extensions.stdout), {"extensions": []})
+        records = json.loads(extensions.stdout)["extensions"]
+        self.assertTrue(all(record["availability"] == "installed-and-loadable" and record["skill_ids"] for record in records))
 
     def test_create_environment_command_creates_a_real_local_python_environment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

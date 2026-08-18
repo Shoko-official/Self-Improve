@@ -203,8 +203,10 @@ fn local_agent_activity_development(project_id: String) -> Result<serde_json::Va
 }
 
 #[tauri::command]
-fn run_local_agent_development(project_id: String, model: String, prompt: String) -> Result<serde_json::Value, String> {
-    run_development_engine(&["agent-run".to_owned(), "--project-id".to_owned(), project_id, "--model".to_owned(), model, "--prompt".to_owned(), prompt])
+fn run_local_agent_development(project_id: String, model: String, prompt: String, skill_ids: Option<Vec<String>>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["agent-run".to_owned(), "--project-id".to_owned(), project_id, "--model".to_owned(), model, "--prompt".to_owned(), prompt];
+    for skill_id in skill_ids.unwrap_or_default() { arguments.extend(["--skill-id".to_owned(), skill_id]); }
+    run_development_engine(&arguments)
 }
 
 #[tauri::command]
@@ -324,6 +326,20 @@ fn scientific_skills_development() -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn extensions_development() -> Result<serde_json::Value, String> {
     run_development_engine(&["extensions".to_owned()])
+}
+
+#[tauri::command]
+fn probe_integrations_development(approved: bool) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["integration-probe".to_owned()];
+    if approved { arguments.push("--approved".to_owned()); }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn call_mcp_tool_development(project_id: String, server_id: String, tool_name: String, arguments: serde_json::Value, approved: bool) -> Result<serde_json::Value, String> {
+    let mut command = vec!["mcp-call".to_owned(), "--project-id".to_owned(), project_id, "--mcp-server-id".to_owned(), server_id, "--mcp-tool-name".to_owned(), tool_name, "--mcp-arguments".to_owned(), arguments.to_string()];
+    if approved { command.push("--approved".to_owned()); }
+    run_development_engine(&command)
 }
 
 #[tauri::command]
@@ -453,7 +469,7 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, retry_compute_job_development, automations_development, create_automation_development, start_automation_development, automation_status_development, cancel_automation_development, retry_automation_development, run_due_automations_development, local_generations_development, kernel_execute_development, kernel_restart_development, local_agent_activity_development, run_local_agent_development, search_huggingface_models_development, plan_huggingface_model_download_development, download_huggingface_model_development, start_huggingface_model_transfer_development, huggingface_model_transfer_status_development, cancel_huggingface_model_transfer_development, retry_huggingface_model_transfer_development, install_ollama_model_development, ollama_inference_plan_development, warmup_ollama_model_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, project_annotations_development, create_project_annotation_development, review_scientific_claims_development, scientific_connectors_development, scientific_skills_development, extensions_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development, create_python_environment_development, install_environment_packages_development, create_r_environment_development, install_r_environment_packages_development, render_artifact_preview_development, storage_transfer_development, remote_compute_development])
+        .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, retry_compute_job_development, automations_development, create_automation_development, start_automation_development, automation_status_development, cancel_automation_development, retry_automation_development, run_due_automations_development, local_generations_development, kernel_execute_development, kernel_restart_development, local_agent_activity_development, run_local_agent_development, search_huggingface_models_development, plan_huggingface_model_download_development, download_huggingface_model_development, start_huggingface_model_transfer_development, huggingface_model_transfer_status_development, cancel_huggingface_model_transfer_development, retry_huggingface_model_transfer_development, install_ollama_model_development, ollama_inference_plan_development, warmup_ollama_model_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, project_annotations_development, create_project_annotation_development, review_scientific_claims_development, scientific_connectors_development, scientific_skills_development, extensions_development, probe_integrations_development, call_mcp_tool_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development, create_python_environment_development, install_environment_packages_development, create_r_environment_development, install_r_environment_packages_development, render_artifact_preview_development, storage_transfer_development, remote_compute_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
 }

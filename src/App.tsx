@@ -23,8 +23,10 @@ import {
   PanelLeftOpen,
   PanelRightOpen,
   Plus,
+  Play,
   Puzzle,
   RefreshCw,
+  Search,
   Send,
   Settings,
   ShieldCheck,
@@ -242,9 +244,9 @@ export function App() {
             {surface === "science" && <ScienceWorkbench projects={projectRecords} language={language} />}
             {surface === "artifacts" && <><ArtifactsSurface /><AnnotationSurface /></>}
             {surface === "automations" && <AutomationsSurface projects={projectRecords} language={language} />}
-            {surface === "mcp" && <RegistrySurface kind="connectors" language={language} />}
-            {surface === "skills" && <RegistrySurface kind="skills" language={language} />}
-            {surface === "extensions" && <RegistrySurface kind="extensions" language={language} />}
+            {surface === "mcp" && <RegistrySurface kind="connectors" language={language} projects={projectRecords} />}
+            {surface === "skills" && <RegistrySurface kind="skills" language={language} projects={projectRecords} />}
+            {surface === "extensions" && <RegistrySurface kind="extensions" language={language} projects={projectRecords} />}
             {surface === "compute" && <ComputeSurface />}
             {surface === "kernel" && <KernelSurface projects={projectRecords} />}
             {surface === "settings" && <SettingsSurface />}
@@ -327,6 +329,8 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [availableSkills, setAvailableSkills] = useState<RegistryEntry[]>([]);
+  const [skillId, setSkillId] = useState("");
 
   useEffect(() => {
     const nextProjectId = activeProjects.some(project => project.id === projectId) ? projectId : activeProjects[0]?.id ?? "";
@@ -340,6 +344,12 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
     }
     void refreshActivity(projectId);
   }, [projectId]);
+
+  useEffect(() => {
+    void invoke<{ skills: RegistryEntry[] }>("scientific_skills_development")
+      .then(result => setAvailableSkills(result.skills.filter(skill => skill.availability === "validated-manifest")))
+      .catch(() => setAvailableSkills([]));
+  }, []);
 
   const filteredCommands = useMemo(() => {
     const query = prompt.startsWith("/") ? prompt.toLowerCase() : "";
@@ -403,7 +413,7 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
     setLastPrompt(trimmedPrompt);
     setPrompt("");
     try {
-      const result = await invoke<{ output: string }>("run_local_agent_development", { projectId, model: model.trim(), prompt: trimmedPrompt });
+      const result = await invoke<{ output: string }>("run_local_agent_development", { projectId, model: model.trim(), prompt: trimmedPrompt, skillIds: skillId ? [skillId] : [] });
       setOutput(result.output);
       await refreshActivity(projectId);
     } catch (reason) {
@@ -488,6 +498,10 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
             {activeProjects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
           </select>
           <input value={model} onChange={event => setModel(event.target.value)} placeholder={language === "fr" ? "Modèle local exact, par exemple qwen3" : "Exact local model, for example qwen3"} aria-label={language === "fr" ? "Modèle local" : "Local model"} />
+          <select value={skillId} onChange={event => setSkillId(event.target.value)} aria-label={language === "fr" ? "Skill optionnel" : "Optional skill"}>
+            <option value="">{language === "fr" ? "Sans skill" : "No skill"}</option>
+            {availableSkills.map(skill => <option value={skill.id} key={skill.id}>{skill.name ?? skill.id}</option>)}
+          </select>
         </div>
         <textarea
           value={prompt}
@@ -526,11 +540,24 @@ export function MarkdownContent({ content }: { content: string }) {
   );
 }
 
-type RegistryEntry = { id: string; capabilities: string[]; network: string; availability: string };
+type RegistryTool = { name: string; title?: string; description?: string; inputSchema?: Record<string, unknown>; annotations?: Record<string, unknown> };
+type RegistryEntry = { id: string; name?: string; description?: string; capabilities: string[]; network: string; availability: string; source?: string; version?: string; license?: string; tools?: RegistryTool[] };
+type McpProbe = { connectors: RegistryEntry[]; failures: Array<{ id: string; code: string }>; detected: number };
 
-function RegistrySurface({ kind, language }: { kind: "connectors" | "skills" | "extensions"; language: Language }) {
+function RegistrySurface({ kind, language, projects }: { kind: "connectors" | "skills" | "extensions"; language: Language; projects: ProjectRecord[] | null }) {
   const [entries, setEntries] = useState<RegistryEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [probeApproval, setProbeApproval] = useState(false);
+  const [probe, setProbe] = useState<McpProbe | null>(null);
+  const [selectedConnectorId, setSelectedConnectorId] = useState("");
+  const [selectedToolName, setSelectedToolName] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [toolArguments, setToolArguments] = useState("{}");
+  const [callApproval, setCallApproval] = useState(false);
+  const [callOutput, setCallOutput] = useState<Record<string, unknown> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
 
   async function load() {
     setError(null);
@@ -545,10 +572,51 @@ function RegistrySurface({ kind, language }: { kind: "connectors" | "skills" | "
   }
 
   useEffect(() => { void load(); }, [kind]);
+  useEffect(() => { if (!projectId && activeProjects[0]) setProjectId(activeProjects[0].id); }, [activeProjects, projectId]);
 
   const isConnectors = kind === "connectors";
   const isExtensions = kind === "extensions";
   const RegistryIcon = isConnectors ? Cable : isExtensions ? Puzzle : Library;
+  const mergedEntries = isConnectors && entries
+    ? [...new Map([...entries, ...(probe?.connectors ?? [])].map(entry => [entry.id, entry])).values()]
+    : entries;
+  const visibleEntries = mergedEntries?.filter(entry => `${entry.name ?? ""} ${entry.id} ${entry.description ?? ""} ${entry.capabilities.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase())) ?? null;
+  const selectedConnector = probe?.connectors.find(connector => connector.id === selectedConnectorId) ?? null;
+
+  async function verifyMcp() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await invoke<McpProbe>("probe_integrations_development", { approved: probeApproval });
+      setProbe(result);
+      const first = result.connectors[0];
+      setSelectedConnectorId(first?.id ?? "");
+      setSelectedToolName(first?.tools?.[0]?.name ?? "");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FR-MCP-PROBE");
+    } finally {
+      setProbeApproval(false);
+      setBusy(false);
+    }
+  }
+
+  async function invokeTool(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    setCallOutput(null);
+    try {
+      const argumentsValue = JSON.parse(toolArguments) as unknown;
+      if (!argumentsValue || typeof argumentsValue !== "object" || Array.isArray(argumentsValue)) throw new Error("FR-MCP-ARGUMENTS");
+      const result = await invoke<{ result: Record<string, unknown> }>("call_mcp_tool_development", { projectId, serverId: selectedConnectorId, toolName: selectedToolName, arguments: argumentsValue, approved: callApproval });
+      setCallOutput(result.result);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FR-MCP-CALL");
+    } finally {
+      setCallApproval(false);
+      setBusy(false);
+    }
+  }
   return (
     <section className="registry-page">
       <div className="page-intro">
@@ -563,24 +631,38 @@ function RegistrySurface({ kind, language }: { kind: "connectors" | "skills" | "
         </div>
       </div>
 
-      {error && <div className="inline-error" role="alert"><CircleAlert size={17} /><div><strong>{language === "fr" ? "Registre indisponible" : "Registry unavailable"}</strong><p>{error}</p><button type="button" onClick={() => void load()}><RefreshCw size={14} />{language === "fr" ? "Réessayer" : "Retry"}</button></div></div>}
+      <div className="registry-controls">
+        <label><Search size={14} /><input aria-label={language === "fr" ? "Filtrer le registre" : "Filter registry"} value={query} onChange={event => setQuery(event.target.value)} placeholder={language === "fr" ? "Filtrer le registre" : "Filter registry"} /></label>
+        {isConnectors && <><label className="approval-check"><input type="checkbox" checked={probeApproval} onChange={event => setProbeApproval(event.target.checked)} />{language === "fr" ? "J'autorise ce probe à démarrer les processus configurés et accéder au réseau" : "I approve this probe starting configured processes and accessing the network"}</label><button className="minor-action" type="button" onClick={() => void verifyMcp()} disabled={busy || !probeApproval}><RefreshCw size={14} />{language === "fr" ? "Vérifier les MCP installés" : "Verify installed MCP"}</button>{probe && <p className="registry-probe-note">{probe.detected} {language === "fr" ? "détectés" : "detected"}, {probe.connectors.length} {language === "fr" ? "vérifiés" : "verified"}, {probe.failures.length} {language === "fr" ? "indisponibles masqués" : "unavailable hidden"}</p>}</>}
+      </div>
+
+      {error && <div className="inline-error" role="alert"><CircleAlert size={17} /><div><strong>{language === "fr" ? "Action impossible" : "Action unavailable"}</strong><p>{error}</p><button type="button" onClick={() => void load()}><RefreshCw size={14} />{language === "fr" ? "Recharger le registre" : "Reload registry"}</button></div></div>}
 
       {entries === null && !error && <div className="registry-loading" aria-label={language === "fr" ? "Chargement" : "Loading"}><span /><span /><span /></div>}
 
-      {entries && (
+      {visibleEntries && (
         <div className="registry-list">
-          {entries.map(entry => (
+          {visibleEntries.map(entry => (
             <article key={entry.id} className="registry-row">
               <div className="registry-symbol"><RegistryIcon size={17} /></div>
-              <div className="registry-main"><h3>{entry.id}</h3><p>{entry.capabilities.join(", ")}</p></div>
+              <div className="registry-main"><h3>{entry.name ?? entry.id}</h3><p>{entry.description ?? entry.capabilities.join(", ")}</p><small>{entry.id}</small></div>
               <dl><div><dt>{language === "fr" ? "Réseau" : "Network"}</dt><dd>{entry.network}</dd></div><div><dt>{language === "fr" ? "Disponibilité" : "Availability"}</dt><dd>{entry.availability}</dd></div></dl>
+              {entry.tools && entry.tools.length > 0 && <button className="minor-action registry-select" type="button" onClick={() => { setSelectedConnectorId(entry.id); setSelectedToolName(entry.tools?.[0]?.name ?? ""); setCallApproval(false); setCallOutput(null); }}>{language === "fr" ? "Ouvrir les outils" : "Open tools"}</button>}
             </article>
           ))}
-          {entries.length === 0 && <div className="registry-empty"><p>{language === "fr" ? "Aucune intégration exécutable détectée. Les extensions non connectables restent masquées." : "No executable integration detected. Extensions that cannot connect remain hidden."}</p></div>}
+          {visibleEntries.length === 0 && <div className="registry-empty"><p>{language === "fr" ? "Aucune intégration exécutable détectée. Les extensions non connectables restent masquées." : "No executable integration detected. Extensions that cannot connect remain hidden."}</p></div>}
         </div>
       )}
+
+      {isConnectors && selectedConnector && <form className="mcp-tool-panel" onSubmit={event => void invokeTool(event)}><div className="automation-heading"><Cable size={17} /><div><span>MCP TOOLS</span><h3>{selectedConnector.id}</h3></div></div><label>{language === "fr" ? "Projet" : "Project"}<select value={projectId} onChange={event => setProjectId(event.target.value)} required>{activeProjects.length === 0 && <option value="">{language === "fr" ? "Aucun projet actif" : "No active project"}</option>}{activeProjects.map(project => <option value={project.id} key={project.id}>{project.name}</option>)}</select></label><label>{language === "fr" ? "Outil vérifié" : "Verified tool"}<select value={selectedToolName} onChange={event => { setSelectedToolName(event.target.value); setCallApproval(false); }} required>{selectedConnector.tools?.map(tool => <option value={tool.name} key={tool.name}>{tool.title ?? tool.name}</option>)}</select></label><label>{language === "fr" ? "Arguments JSON" : "JSON arguments"}<textarea value={toolArguments} onChange={event => setToolArguments(event.target.value)} spellCheck={false} /></label><label className="approval-check"><input type="checkbox" checked={callApproval} onChange={event => setCallApproval(event.target.checked)} />{language === "fr" ? "J'approuve explicitement cet appel MCP" : "I explicitly approve this MCP call"}</label><button className="action" type="submit" disabled={busy || !projectId || !selectedToolName || !callApproval}><Play size={14} />{language === "fr" ? "Appeler l'outil" : "Call tool"}</button>{callOutput && <div className="mcp-tool-output">{mcpMarkdown(callOutput) && <MarkdownContent content={mcpMarkdown(callOutput) ?? ""} />}<details><summary>{language === "fr" ? "Résultat structuré" : "Structured result"}</summary><pre className="agent-output">{JSON.stringify(callOutput, null, 2)}</pre></details></div>}</form>}
     </section>
   );
+}
+
+export function mcpMarkdown(output: Record<string, unknown>): string | null {
+  if (!Array.isArray(output.content)) return null;
+  const text = output.content.find(item => item && typeof item === "object" && "type" in item && item.type === "text" && "text" in item && typeof item.text === "string");
+  return text && typeof text === "object" && "text" in text ? String(text.text) : null;
 }
 
 function ScienceWorkbench({ projects, language }: { projects: ProjectRecord[] | null; language: Language }) {
