@@ -86,6 +86,7 @@ def copy_runtime_licenses(root: Path, build_python: Path) -> list[str]:
                 Path(sys.base_prefix) / "LICENSE.txt",
                 Path(sys.base_prefix) / "LICENSE",
                 root / "licenses" / f"CPYTHON-{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}-LICENSE.txt",
+                *sorted((root / "licenses").glob("CPYTHON-*-LICENSE.txt")),
             )
             if candidate.is_file()
         ),
