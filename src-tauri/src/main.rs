@@ -1,9 +1,12 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::io::{BufRead, BufReader, Write};
-use std::path::PathBuf;
+use sha2::{Digest, Sha256};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::path::{Component, Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{Mutex, OnceLock};
+use tauri::Manager;
 
 struct KernelBridge {
     child: Child,
@@ -12,6 +15,86 @@ struct KernelBridge {
 }
 
 static KERNEL_BRIDGE: OnceLock<Mutex<Option<KernelBridge>>> = OnceLock::new();
+static MANAGED_RESOURCE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+fn uses_managed_engine() -> bool {
+    !cfg!(debug_assertions) || cfg!(feature = "managed-engine")
+}
+
+#[derive(Deserialize)]
+struct ManagedEngineManifest {
+    protocol_version: u32,
+    target_platform: String,
+    target_architecture: String,
+    executable: String,
+    sha256: String,
+}
+
+fn file_sha256(path: &Path) -> Result<String, String> {
+    let mut file = File::open(path).map_err(|_| "FR-BUNDLE-EXECUTABLE-MISSING".to_owned())?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer).map_err(|_| "FR-BUNDLE-EXECUTABLE-READ-FAILED".to_owned())?;
+        if count == 0 { break; }
+        digest.update(&buffer[..count]);
+    }
+    Ok(digest.finalize().iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn verify_managed_engine(manifest_path: &Path, executable_directory: &Path) -> Result<PathBuf, String> {
+    let manifest: ManagedEngineManifest = serde_json::from_reader(
+        File::open(manifest_path).map_err(|_| "FR-BUNDLE-MANIFEST-MISSING".to_owned())?,
+    ).map_err(|_| "FR-BUNDLE-MANIFEST-INVALID".to_owned())?;
+    if manifest.protocol_version != 1 {
+        return Err("FR-BUNDLE-PROTOCOL-MISMATCH".to_owned());
+    }
+    if manifest.target_platform != std::env::consts::OS || manifest.target_architecture != std::env::consts::ARCH {
+        return Err("FR-BUNDLE-PLATFORM-MISMATCH".to_owned());
+    }
+    let relative = Path::new(&manifest.executable);
+    if relative.components().count() != 1 || !matches!(relative.components().next(), Some(Component::Normal(_))) {
+        return Err("FR-BUNDLE-PATH-ESCAPE".to_owned());
+    }
+    let executable = executable_directory.join(relative);
+    if !executable.is_file() {
+        return Err("FR-BUNDLE-EXECUTABLE-MISSING".to_owned());
+    }
+    if manifest.sha256.len() != 64 || !manifest.sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) || file_sha256(&executable)? != manifest.sha256.to_ascii_lowercase() {
+        return Err("FR-BUNDLE-HASH-MISMATCH".to_owned());
+    }
+    Ok(executable)
+}
+
+fn managed_engine_path() -> Result<PathBuf, String> {
+    let resources = MANAGED_RESOURCE_DIR.get().ok_or_else(|| "FR-BUNDLE-RESOURCE-DIR-MISSING".to_owned())?;
+    let executable_directory = std::env::current_exe().map_err(|_| "FR-BUNDLE-APP-PATH-MISSING".to_owned())?
+        .parent().map(Path::to_path_buf).ok_or_else(|| "FR-BUNDLE-APP-PATH-MISSING".to_owned())?;
+    verify_managed_engine(&resources.join("runtime-packs").join("managed-engine").join("manifest.json"), &executable_directory)
+}
+
+fn initialize_managed_resources(resources: PathBuf) -> Result<(), String> {
+    MANAGED_RESOURCE_DIR.set(resources).map_err(|_| "FR-BUNDLE-RESOURCE-DIR-DUPLICATE".to_owned())?;
+    managed_engine_path().map(|_| ())
+}
+
+fn engine_command() -> Result<Command, String> {
+    if !uses_managed_engine() {
+        let source_engine = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent().map(|path| path.join("engine"))
+            .ok_or_else(|| "FR-ENGINE-SOURCE-MISSING: unable to locate the development engine.".to_owned())?;
+        let python = std::env::var("FRONTIER_PYTHON").unwrap_or_else(|_| "python".to_owned());
+        let mut python_paths = vec![source_engine];
+        if let Some(existing) = std::env::var_os("PYTHONPATH") { python_paths.extend(std::env::split_paths(&existing)); }
+        let python_path = std::env::join_paths(python_paths)
+            .map_err(|_| "FR-ENGINE-PYTHONPATH-INVALID: unable to configure the development engine.".to_owned())?;
+        let mut command = Command::new(python);
+        command.args(["-m", "frontier_engine.cli"]).env("PYTHONPATH", python_path);
+        Ok(command)
+    } else {
+        Ok(Command::new(managed_engine_path()?))
+    }
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -175,12 +258,8 @@ fn kernel_request(request: serde_json::Value) -> Result<serde_json::Value, Strin
     let bridge = KERNEL_BRIDGE.get_or_init(|| Mutex::new(None));
     let mut guard = bridge.lock().map_err(|_| "FR-KERNEL-BRIDGE-LOCKED".to_owned())?;
     if guard.is_none() {
-        let source_engine = PathBuf::from(env!("CARGO_MANIFEST_DIR")).parent().map(|path| path.join("engine")).ok_or_else(|| "FR-ENGINE-SOURCE-MISSING".to_owned())?;
-        let python = std::env::var("FRONTIER_PYTHON").unwrap_or_else(|_| "python".to_owned());
-        let mut python_paths = vec![source_engine];
-        if let Some(existing) = std::env::var_os("PYTHONPATH") { python_paths.extend(std::env::split_paths(&existing)); }
-        let python_path = std::env::join_paths(python_paths).map_err(|_| "FR-ENGINE-PYTHONPATH-INVALID".to_owned())?;
-        let mut child = Command::new(python).args(["-m", "frontier_engine.cli", "kernel-stdio"]).env("PYTHONPATH", python_path).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_| "FR-KERNEL-BRIDGE-START-FAILED".to_owned())?;
+        let mut command = engine_command()?;
+        let mut child = command.arg("kernel-stdio").stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().map_err(|_| "FR-KERNEL-BRIDGE-START-FAILED".to_owned())?;
         let stdin = child.stdin.take().ok_or_else(|| "FR-KERNEL-BRIDGE-STDIN-MISSING".to_owned())?;
         let stdout = child.stdout.take().ok_or_else(|| "FR-KERNEL-BRIDGE-STDOUT-MISSING".to_owned())?;
         *guard = Some(KernelBridge { child, stdin, stdout: BufReader::new(stdout) });
@@ -428,30 +507,11 @@ fn remote_compute_development(target: String, endpoint: String, command: Vec<Str
 }
 
 fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, String> {
-    if !cfg!(debug_assertions) {
-        return Err(
-            "FR-ENGINE-BUNDLED-RUNTIME-MISSING: packaged Frontier requires a managed Python runtime."
-                .to_owned(),
-        );
-    }
-
-    let source_engine = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(|path| path.join("engine"))
-        .ok_or_else(|| "FR-ENGINE-SOURCE-MISSING: unable to locate the development engine.".to_owned())?;
-    let python = std::env::var("FRONTIER_PYTHON").unwrap_or_else(|_| "python".to_owned());
-    let mut python_paths = vec![source_engine];
-    if let Some(existing) = std::env::var_os("PYTHONPATH") {
-        python_paths.extend(std::env::split_paths(&existing));
-    }
-    let python_path = std::env::join_paths(python_paths)
-        .map_err(|_| "FR-ENGINE-PYTHONPATH-INVALID: unable to configure the development engine.".to_owned())?;
-    let output = Command::new(python)
-        .args(["-m", "frontier_engine.cli", "--json"])
+    let output = engine_command()?
+        .arg("--json")
         .args(arguments)
-        .env("PYTHONPATH", python_path)
         .output()
-        .map_err(|_| "FR-ENGINE-START-FAILED: unable to start the development Python runtime.".to_owned())?;
+        .map_err(|_| "FR-ENGINE-START-FAILED: unable to start the managed engine runtime.".to_owned())?;
 
     if !output.status.success() {
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
@@ -466,10 +526,106 @@ fn run_development_engine(arguments: &[String]) -> Result<serde_json::Value, Str
         .map_err(|_| "FR-ENGINE-COMMAND-INVALID: engine returned invalid JSON.".to_owned())
 }
 
+fn managed_engine_smoke_requested() -> bool {
+    std::env::args_os().nth(1).is_some_and(|value| value == "--managed-engine-smoke")
+}
+
+fn run_managed_engine_smoke() -> i32 {
+    if !uses_managed_engine() {
+        eprintln!("FR-BUNDLE-MANAGED-FEATURE-MISSING");
+        return 1;
+    }
+    let executable = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(_) => { eprintln!("FR-BUNDLE-APP-PATH-MISSING"); return 1; }
+    };
+    let default_resources = if cfg!(target_os = "macos") {
+        executable.parent().and_then(Path::parent).map(|path| path.join("Resources"))
+    } else {
+        executable.parent().map(Path::to_path_buf)
+    };
+    let resources = std::env::var_os("FRONTIER_RESOURCE_DIR").map(PathBuf::from).or(default_resources);
+    if let Err(error) = resources.ok_or_else(|| "FR-BUNDLE-RESOURCE-DIR-MISSING".to_owned()).and_then(initialize_managed_resources) {
+        eprintln!("{error}");
+        return 1;
+    }
+    match run_development_engine(&["doctor".to_owned()]) {
+        Ok(report) => { println!("{report}"); 0 }
+        Err(error) => { eprintln!("{error}"); 1 }
+    }
+}
+
 fn main() {
+    if managed_engine_smoke_requested() {
+        std::process::exit(run_managed_engine_smoke());
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            if uses_managed_engine() {
+                let resources = app.path().resource_dir()?;
+                initialize_managed_resources(resources).map_err(std::io::Error::other)?;
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![capability_report, engine_doctor_development, workspace_projects_development, create_workspace_project_development, workspace_sessions_development, create_workspace_session_development, set_workspace_project_instructions_development, set_workspace_session_starred_development, set_workspace_session_reasoning_development, search_workspace_sessions_development, archive_workspace_project_development, compute_jobs_development, enqueue_compute_job_development, cancel_compute_job_development, retry_compute_job_development, automations_development, create_automation_development, start_automation_development, automation_status_development, cancel_automation_development, retry_automation_development, run_due_automations_development, local_generations_development, kernel_execute_development, kernel_restart_development, local_agent_activity_development, run_local_agent_development, search_huggingface_models_development, plan_huggingface_model_download_development, download_huggingface_model_development, start_huggingface_model_transfer_development, huggingface_model_transfer_status_development, cancel_huggingface_model_transfer_development, retry_huggingface_model_transfer_development, install_ollama_model_development, ollama_inference_plan_development, warmup_ollama_model_development, project_artifacts_development, create_project_artifact_development, project_artifact_versions_development, project_annotations_development, create_project_annotation_development, review_scientific_claims_development, scientific_connectors_development, scientific_skills_development, extensions_development, probe_integrations_development, call_mcp_tool_development, literature_queries_development, record_literature_query_development, scientific_claims_development, create_scientific_claim_development, set_scientific_claim_status_development, scientific_environment_probe_development, create_python_environment_development, install_environment_packages_development, create_r_environment_development, install_r_environment_packages_development, render_artifact_preview_development, storage_transfer_development, remote_compute_development])
         .run(tauri::generate_context!())
         .expect("failed to run Frontier desktop application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture_root(label: &str) -> PathBuf {
+        let unique = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("frontier-{label}-{}-{unique}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn write_fixture_manifest(root: &Path, executable: &str, sha256: &str) -> PathBuf {
+        let path = root.join("manifest.json");
+        let body = json!({
+            "protocol_version": 1,
+            "target_platform": std::env::consts::OS,
+            "target_architecture": std::env::consts::ARCH,
+            "executable": executable,
+            "sha256": sha256,
+        });
+        std::fs::write(&path, serde_json::to_vec(&body).unwrap()).unwrap();
+        path
+    }
+
+    #[test]
+    fn managed_engine_verification_accepts_exact_bytes() {
+        let root = fixture_root("managed-valid");
+        let executable_name = if cfg!(windows) { "frontier-engine.exe" } else { "frontier-engine" };
+        let executable = root.join(executable_name);
+        std::fs::write(&executable, b"managed engine fixture").unwrap();
+        let manifest = write_fixture_manifest(&root, executable_name, &file_sha256(&executable).unwrap());
+        assert_eq!(verify_managed_engine(&manifest, &root).unwrap(), executable);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn managed_engine_verification_rejects_hash_mismatch_and_missing_binary() {
+        let root = fixture_root("managed-invalid");
+        let executable_name = if cfg!(windows) { "frontier-engine.exe" } else { "frontier-engine" };
+        let executable = root.join(executable_name);
+        std::fs::write(&executable, b"managed engine fixture").unwrap();
+        let manifest = write_fixture_manifest(&root, executable_name, &"0".repeat(64));
+        assert_eq!(verify_managed_engine(&manifest, &root).unwrap_err(), "FR-BUNDLE-HASH-MISMATCH");
+        std::fs::remove_file(executable).unwrap();
+        assert_eq!(verify_managed_engine(&manifest, &root).unwrap_err(), "FR-BUNDLE-EXECUTABLE-MISSING");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn managed_engine_verification_rejects_path_escape() {
+        let root = fixture_root("managed-escape");
+        let manifest = write_fixture_manifest(&root, "../frontier-engine", &"0".repeat(64));
+        assert_eq!(verify_managed_engine(&manifest, &root).unwrap_err(), "FR-BUNDLE-PATH-ESCAPE");
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

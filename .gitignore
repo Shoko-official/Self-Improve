@@ -10,4 +10,7 @@ __pycache__/
 coverage/
 playwright-report/
 test-results/
+target/
+src-tauri/binaries/
+runtime-packs/managed-engine/
 

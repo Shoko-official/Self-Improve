@@ -1,0 +1,87 @@
+name: desktop-packages
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/package.yml"
+      - "engine/**"
+      - "requirements-build.txt"
+      - "scripts/build_managed_engine.py"
+      - "scripts/managed_engine_entry.py"
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  package:
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            extension: .exe
+            bundles: msi
+          - name: linux-x64
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            extension: ""
+            bundles: deb,appimage
+          - name: macos-arm64
+            os: macos-15
+            target: aarch64-apple-darwin
+            extension: ""
+            bundles: app,dmg
+          - name: macos-x64
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            extension: ""
+            bundles: app,dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - run: pnpm install --frozen-lockfile
+      - run: python scripts/build_managed_engine.py --target-triple ${{ matrix.target }}
+      - run: python scripts/generate_sbom.py
+      - name: Smoke managed sidecar
+        shell: bash
+        run: |
+          chmod +x "src-tauri/binaries/frontier-engine-${{ matrix.target }}${{ matrix.extension }}"
+          "src-tauri/binaries/frontier-engine-${{ matrix.target }}${{ matrix.extension }}" --json doctor
+      - name: Build native packages
+        run: pnpm tauri build --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json --bundles ${{ matrix.bundles }}
+      - name: Smoke packaged Rust boundary
+        shell: bash
+        env:
+          FRONTIER_RESOURCE_DIR: ${{ github.workspace }}
+        run: |
+          chmod +x "src-tauri/target/${{ matrix.target }}/release/frontier${{ matrix.extension }}"
+          "src-tauri/target/${{ matrix.target }}/release/frontier${{ matrix.extension }}" --managed-engine-smoke
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shokos-llm-${{ matrix.name }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/**
+            SBOM.cdx.json
+            THIRD_PARTY_NOTICES.md
+            runtime-packs/managed-engine/manifest.json
+          if-no-files-found: error
