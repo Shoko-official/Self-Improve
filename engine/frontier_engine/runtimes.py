@@ -57,6 +57,34 @@ def probe_ollama() -> dict[str, Any]:
     return {"runtime": "ollama", "available": bool(models), "reason": None if models else "FR-RUNTIME-OLLAMA-NO-MODEL", "version": version, "endpoint": _ollama_endpoint(), "models": models, "installed_models": installed, "loaded_models": loaded}
 
 
+def probe_lm_studio_library() -> dict[str, Any]:
+    settings_path = Path.home() / ".lmstudio" / "settings.json"
+    models_root = Path.home() / ".lmstudio" / "models"
+    if settings_path.is_file():
+        try:
+            settings = json.loads(settings_path.read_text(encoding="utf-8"))
+            configured = settings.get("downloadsFolder") if isinstance(settings, dict) else None
+            if isinstance(configured, str) and configured.strip():
+                models_root = Path(configured).expanduser()
+        except (OSError, json.JSONDecodeError):
+            pass
+    if not models_root.is_dir():
+        return {"source": "lmstudio-library", "available": False, "reason": "FR-LM-STUDIO-LIBRARY-NOT-FOUND", "models_root": str(models_root), "models": []}
+    models = [
+        {
+            "key": str(path.relative_to(models_root)).replace("\\", "/"),
+            "display_name": path.stem,
+            "path": str(path.resolve()),
+            "size_bytes": path.stat().st_size,
+            "format": "gguf",
+            "execution_runtime": "shoko-managed-gguf",
+        }
+        for path in sorted(models_root.rglob("*.gguf"))
+        if path.is_file() and not path.name.lower().startswith("mmproj-")
+    ]
+    return {"source": "lmstudio-library", "available": bool(models), "reason": None if models else "FR-LM-STUDIO-LIBRARY-NO-COMPATIBLE-MODEL", "models_root": str(models_root.resolve()), "models": models}
+
+
 class LocalRuntimeUnavailable(RuntimeError):
     pass
 
