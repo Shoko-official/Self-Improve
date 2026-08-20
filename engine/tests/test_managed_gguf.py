@@ -15,6 +15,7 @@ class ManagedGgufTests(unittest.TestCase):
             fixture = root / "fixture.zip"
             with zipfile.ZipFile(fixture, "w") as archive:
                 archive.writestr("runtime/llama-cli.exe", b"fixture")
+                archive.writestr("runtime/llama-cli", b"fixture")
             digest = hashlib.sha256(fixture.read_bytes()).hexdigest()
 
             def copy_fixture(_url: str, destination: Path, expected_bytes: int) -> None:
