@@ -19,8 +19,15 @@ class AgentStateStore:
  def add_todo(self,project_id:str,text:str)->str:
   identifier=str(uuid.uuid4());self.connection.execute("INSERT INTO todos VALUES(?,?,?,?)",(identifier,project_id,text,"pending"));self.connection.commit();return identifier
  def transition_todo(self,todo_id:str,state:str)->None:
-  if state not in {"pending","in_progress","completed","failed"}:raise ValueError("Invalid todo state")
+  if state not in {"pending","in_progress","paused","completed","failed"}:raise ValueError("Invalid todo state")
   if self.connection.execute("UPDATE todos SET state=? WHERE id=?",(state,todo_id)).rowcount!=1:raise KeyError("Todo not found")
+  self.connection.commit()
+ def update_todo(self,todo_id:str,text:str)->None:
+  if not text.strip():raise ValueError("Todo text is required")
+  if self.connection.execute("UPDATE todos SET text=? WHERE id=?",(text.strip(),todo_id)).rowcount!=1:raise KeyError("Todo not found")
+  self.connection.commit()
+ def delete_todo(self,todo_id:str)->None:
+  if self.connection.execute("DELETE FROM todos WHERE id=?",(todo_id,)).rowcount!=1:raise KeyError("Todo not found")
   self.connection.commit()
  def todos(self,project_id:str)->tuple[Todo,...]:return tuple(Todo(row["id"],row["text"],row["state"])for row in self.connection.execute("SELECT * FROM todos WHERE project_id=?",(project_id,)))
  def remember(self,project_id:str,content:str)->str:

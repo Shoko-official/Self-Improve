@@ -8,3 +8,9 @@ class AgentStateTests(unittest.TestCase):
    memory=store.remember("a","User prefers local storage")
    self.assertEqual(store.plan("a"),"Test plan");self.assertEqual(store.todos("a")[0].state,"completed");self.assertEqual(store.search_memory("a","local"),("User prefers local storage",));self.assertEqual(store.search_memory("b","local"),())
    store.forget(memory);self.assertEqual(store.search_memory("a","local"),());store.close()
+ def test_todo_can_be_edited_paused_and_deleted(self)->None:
+  with tempfile.TemporaryDirectory() as directory:
+   store=AgentStateStore(Path(directory)/"agent.sqlite3");todo=store.add_todo("a","Draft")
+   store.update_todo(todo,"Review evidence");store.transition_todo(todo,"paused")
+   self.assertEqual(store.todos("a")[0].text,"Review evidence");self.assertEqual(store.todos("a")[0].state,"paused")
+   store.delete_todo(todo);self.assertEqual(store.todos("a"),());store.close()
