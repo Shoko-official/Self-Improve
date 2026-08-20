@@ -937,6 +937,8 @@ def main() -> None:
     parser.add_argument("--work-mode", choices=("chat", "plan", "science"), default="chat")
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
+    parser.add_argument("--todo-id")
+    parser.add_argument("--todo-text")
     parser.add_argument("--working-directory", type=Path)
     parser.add_argument("--workspace", type=Path)
     parser.add_argument("--workspace-action", choices=("list", "read", "write"))
@@ -1187,7 +1189,12 @@ def main() -> None:
     elif args.command == "agent-activity":
         if args.project_id is None:
             parser.error("agent-activity requires --project-id")
-        result = agent_activity(root, args.project_id)
+        if args.operation is not None:
+            if args.todo_id is None:
+                parser.error("agent-activity todo operation requires --todo-id")
+            result = manage_todo(root, args.project_id, args.todo_id, args.operation, args.todo_text)
+        else:
+            result = agent_activity(root, args.project_id)
     elif args.command == "generations":
         result = generations(root, args.project_id, args.generation_id)
     elif args.command == "generate-local":
