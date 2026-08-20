@@ -339,6 +339,10 @@ const slashCommands: SlashCommand[] = [
   { name: "/settings", icon: Settings, en: "Open application settings", fr: "Ouvrir les réglages", target: "settings" },
 ];
 
+const frenchCommandDescriptions: Record<string, string> = {
+  "/new": "Effacer le brouillon et la sortie", "/projects": "Ouvrir les projets locaux", "/models": "Ouvrir la gestion des modèles", "/scheduled": "Ouvrir les pipelines planifiés", "/automations": "Ouvrir les pipelines IA locaux", "/plugins": "Ouvrir les capacités connectées", "/mcp": "Inspecter les connecteurs MCP", "/skills": "Inspecter les skills installés", "/extensions": "Inspecter les extensions exécutables", "/science": "Ouvrir l'espace Science", "/fast": "Utiliser le raisonnement rapide", "/deep": "Utiliser le raisonnement approfondi", "/plan": "Préparer un plan explicite avant exécution", "/read": "Limiter l'agent à la lecture", "/ask": "Demander avant les actions protégées", "/full": "Autoriser l'accès complet au projet", "/doctor": "Exécuter le diagnostic du moteur local", "/settings": "Ouvrir les réglages",
+};
+
 function ChatSurface({ projects, language, onNavigate }: { projects: ProjectRecord[] | null; language: Language; onNavigate: (surface: Surface) => void }) {
   const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
   const [projectId, setProjectId] = useState("");
@@ -529,7 +533,7 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
               return (
                 <button key={command.name} type="button" onClick={() => void runCommand(command)}>
                   <CommandIcon size={15} />
-                  <span><strong>{command.name}</strong><small>{language === "fr" ? command.fr : command.en}</small></span>
+                  <span><strong>{command.name}</strong><small>{language === "fr" ? frenchCommandDescriptions[command.name] : command.en}</small></span>
                 </button>
               );
             })}
