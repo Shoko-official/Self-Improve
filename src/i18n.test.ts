@@ -5,6 +5,8 @@ describe("translate", () => {
   it("resolves the primary navigation in both supported languages", () => {
     expect(translate("en", "workspaces")).toBe("Workspaces");
     expect(translate("fr", "workspaces")).toBe("Espaces de travail");
+    expect(translate("fr", "models")).toBe("Modèles");
+    expect(translate("fr", "modelsCaption")).toBe("Preuves d'exécution");
   });
 
   it("resolves primary surface copy in both supported languages", () => {
@@ -18,6 +20,6 @@ describe("translate", () => {
     expect(surfaceText("fr", "createProject")).toBe("Créer le projet");
     expect(surfaceText("fr", "refreshProjectLedger")).toBe("Actualiser le registre des projets");
     expect(surfaceText("en", "runEvidenceReview")).toBe("Run evidence review");
-    expect(surfaceText("fr", "saveAnnotation")).toBe("Enregistrer l’annotation");
+    expect(surfaceText("fr", "saveAnnotation")).toBe("Enregistrer l'annotation");
   });
 });
