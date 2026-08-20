@@ -4,10 +4,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ModelsSurface } from "./ModelsSurface";
 import { AutomationsSurface } from "./AutomationsSurface";
+import { ScientificFigureWorkbench } from "./ScientificFigure";
 import {
   Bot,
   Boxes,
   Cable,
+  ChartScatter,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -666,29 +668,24 @@ export function mcpMarkdown(output: Record<string, unknown>): string | null {
 }
 
 function ScienceWorkbench({ projects, language }: { projects: ProjectRecord[] | null; language: Language }) {
-  const [panel, setPanel] = useState<"notebook" | "artifacts">("notebook");
+  const [panel, setPanel] = useState<"figures" | "notebook" | "evidence" | "artifacts">("figures");
   return (
     <section className="science-workbench">
-      <div className="science-conversation">
-        <div className="science-titlebar">
-          <div><p>{language === "fr" ? "Projet scientifique" : "Science project"}</p><h2>{language === "fr" ? "Recherche et preuves" : "Research and evidence"}</h2></div>
-          <div className="science-panel-switch" role="group" aria-label={language === "fr" ? "Panneau scientifique" : "Science panel"}>
-            <button type="button" aria-pressed={panel === "notebook"} onClick={() => setPanel("notebook")}><Code2 size={15} />Notebook</button>
-            <button type="button" aria-pressed={panel === "artifacts"} onClick={() => setPanel("artifacts")}><FileStack size={15} />{language === "fr" ? "Artefacts" : "Artifacts"}</button>
-          </div>
+      <div className="science-titlebar">
+        <div><p>{language === "fr" ? "Espace scientifique local" : "Local science workspace"}</p><h2>{language === "fr" ? "Analyse et artefacts" : "Analysis and artifacts"}</h2></div>
+        <div className="science-panel-switch" role="group" aria-label={language === "fr" ? "Vue scientifique" : "Science view"}>
+          <button type="button" aria-pressed={panel === "figures"} onClick={() => setPanel("figures")}><ChartScatter size={15} />Figures</button>
+          <button type="button" aria-pressed={panel === "notebook"} onClick={() => setPanel("notebook")}><Code2 size={15} />Notebook</button>
+          <button type="button" aria-pressed={panel === "evidence"} onClick={() => setPanel("evidence")}><FlaskConical size={15} />{language === "fr" ? "Preuves" : "Evidence"}</button>
+          <button type="button" aria-pressed={panel === "artifacts"} onClick={() => setPanel("artifacts")}><FileStack size={15} />{language === "fr" ? "Artefacts" : "Artifacts"}</button>
         </div>
-        <ScienceSurface />
-        <ReviewerSurface />
       </div>
-      <aside className="science-inspector" aria-label={panel === "notebook" ? "Notebook" : (language === "fr" ? "Artefacts" : "Artifacts")}>
-        <div className="science-inspector-header">
-          <div className="science-file-icon">{panel === "notebook" ? <Code2 size={16} /> : <FileStack size={16} />}</div>
-          <div><p>{panel === "notebook" ? "python.ipynb" : (language === "fr" ? "Artefacts du projet" : "Project artifacts")}</p><span>{language === "fr" ? "Stockage local" : "Local storage"}</span></div>
-        </div>
-        <div className="science-inspector-body">
-          {panel === "notebook" ? <KernelSurface projects={projects} /> : <><ArtifactsSurface /><AnnotationSurface /></>}
-        </div>
-      </aside>
+      <div className="science-view">
+        {panel === "figures" && <ScientificFigureWorkbench projects={projects} language={language} />}
+        {panel === "notebook" && <div className="science-single-view"><KernelSurface projects={projects} /></div>}
+        {panel === "evidence" && <div className="science-evidence-view"><ScienceSurface /><ReviewerSurface /></div>}
+        {panel === "artifacts" && <div className="science-evidence-view"><ArtifactsSurface /><AnnotationSurface /></div>}
+      </div>
     </section>
   );
 }
