@@ -1,0 +1,11 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/frontier-engine"],
+    "resources": {
+      "../runtime-packs/ollama/manifest.json": "runtime-packs/ollama/manifest.json",
+      "../runtime-packs/managed-engine": "runtime-packs/managed-engine",
+      "../SBOM.cdx.json": "compliance/SBOM.cdx.json",
+      "../THIRD_PARTY_NOTICES.md": "compliance/THIRD_PARTY_NOTICES.md"
+    }
+  }
+}

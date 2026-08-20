@@ -8,7 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "managed-engine": "python scripts/build_managed_engine.py",
+    "sbom": "python scripts/generate_sbom.py",
+    "package:windows": "pnpm managed-engine && pnpm sbom && pnpm tauri build --debug --features managed-engine --config src-tauri/tauri.release.conf.json --bundles msi"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

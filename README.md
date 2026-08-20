@@ -22,8 +22,18 @@ python -m frontier_engine.cli stop --json
 python -m frontier_engine.cli projects --json
 ```
 
-The initial Ollama runtime pack supports explicit local model installation and generation only after a live probe. Remote-provider credentials and scientific-kernel environments remain deliberately unavailable rather than emulated.
+The initial Ollama runtime pack supports explicit local model installation and generation only after a live probe. Remote-provider credentials remain deliberately unavailable rather than emulated.
 
-The Windows debug desktop launch was verified on 2026-08-15 with `pnpm tauri dev`. Release packaging remains blocked on this host by application control while a Rust release build script executes.
+The Windows desktop launch was verified on 2026-08-15 with `pnpm tauri dev`. A functional unsigned Windows MSI with the managed engine is built with the debug Rust profile because host application control blocks an optimized Rust build script with `os error 4551`. This limitation is recorded in the acceptance matrix and is not represented as a signed release build.
 
-The desktop's development-engine IPC calls `python -m frontier_engine doctor` only in a debug build. Set `FRONTIER_PYTHON` to select the development interpreter. Release builds reject this IPC until Frontier bundles a managed Python runtime, so installed application behavior never relies on a global Python installation.
+Development IPC calls the source engine through `FRONTIER_PYTHON`. Packaged builds use a native PyInstaller sidecar, verify its target, path, protocol version, and SHA-256 before every process start, and never fall back to a global Python installation.
+
+Build the managed sidecar, compliance inventory, and current Windows package:
+
+```powershell
+pnpm managed-engine
+python scripts/generate_sbom.py
+pnpm tauri build --debug --features managed-engine --config src-tauri\tauri.release.conf.json --bundles msi
+```
+
+GitHub Actions builds optimized native packages for Windows x64, Linux x64, macOS Apple silicon, and macOS Intel. These artifacts are unsigned unless signing credentials are explicitly configured.

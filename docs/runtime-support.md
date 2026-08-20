@@ -14,7 +14,7 @@ The desktop Models surface exposes this same operation through development-only 
 
 Managed bundles use a JSON manifest with runtime/version, protocol version, target platform and architecture, executable-relative path, and SHA-256. `frontierctl verify-runtime-bundle --manifest PATH --bundle-root PATH` checks platform, path containment, file presence, and exact bytes. A missing or mismatched bundle is reported with a stable `FR-BUNDLE-*` diagnostic; verification never falls back to a host runtime.
 
-Tauri packages the `runtime-packs` manifest directory as a resource so a future signed runtime artifact can be discovered in the packaged app. The current repository contains contract metadata only; packaged builds still refuse engine IPC until a verified executable bundle is present.
+Tauri packages the optional `runtime-packs` manifests as resources. The application engine itself is a separate managed sidecar built per OS and architecture in an isolated PyInstaller environment. Its generated manifest records the exact platform, architecture, protocol, executable name, and SHA-256. Rust verifies that manifest before every engine or kernel spawn and never substitutes a host Python runtime.
 
 `download_runtime_artifact` is the acquisition boundary for a future distribution service. It requires a signed query URL, explicit approval, a required SHA-256, a bounded response, and an atomic destination write. It never executes the downloaded bytes; `verify_bundle` must pass before any runtime is considered usable.
 

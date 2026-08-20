@@ -6,8 +6,12 @@ During development, run `python -m frontier_engine.cli doctor --json` for the ho
 
 `python -m frontier_engine.cli export --output C:\\path\\frontier.zip --json` writes a new ZIP snapshot of that local data root, including a SHA-256 manifest. It refuses to overwrite an archive or write inside the source root. `python -m frontier_engine.cli import --input C:\\path\\frontier.zip --destination C:\\path\\restored-data --json` requires a new or empty destination, verifies the manifest, and rejects traversal paths before writing data.
 
-Before enabling a packaged engine, verify its supplied manifest with `frontierctl verify-runtime-bundle --manifest PATH --bundle-root PATH`. The command returns `valid: true` only for the exact target platform, executable path, and SHA-256 recorded by the bundle publisher.
+Before enabling a separately acquired runtime pack, verify its supplied manifest with `frontierctl verify-runtime-bundle --manifest PATH --bundle-root PATH`. The command returns `valid: true` only for the exact target platform, executable path, and SHA-256 recorded by the bundle publisher.
 
-Run `python scripts/release_gate.py` from a clean checkout before a release. It checks required repository files, acceptance-matrix coverage, all three CI operating systems, and a clean worktree. Use `--allow-dirty` only while iterating locally; a passing gate does not override an acceptance row that is explicitly `not_verifiable_here`.
+Desktop packages contain a separate `frontier-engine` sidecar produced in an isolated, pinned PyInstaller environment. Tauri places it next to the native application binary and installs its manifest plus Python and PyInstaller license texts under `runtime-packs/managed-engine`. Rust verifies protocol version, OS, architecture, a single-file relative path, and SHA-256 before every spawn. The `--managed-engine-smoke` native argument exercises this exact Rust-to-sidecar boundary without opening the window.
+
+`.github/workflows/package.yml` builds MSI, DEB, AppImage, app, and DMG artifacts on their native hosts. macOS Apple silicon and Intel use separate runners because the managed sidecar is never cross-compiled. Package jobs run the sidecar doctor and the packaged Rust-boundary smoke before uploading artifacts.
+
+Run `python scripts/release_gate.py` from a clean checkout before a release. It checks required repository files, acceptance-matrix coverage, smoke and package operating systems, the managed sidecar bundle contract, current lock-backed SBOM evidence, and a clean worktree. Use `--allow-dirty` only while iterating locally.
 
 Daemon lifecycle, update verification, and remote tunnel support are not implemented yet. `serve --duration-seconds N` exists for controlled tests and demonstrations; the default service runs until interrupted.
