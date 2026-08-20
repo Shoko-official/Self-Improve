@@ -157,11 +157,11 @@ export function App() {
   }, []);
 
   return (
-    <div className={"app-frame" + (sidebarOpen ? "" : " sidebar-collapsed") + (inspectorOpen ? "" : " inspector-collapsed")}>
+    <div className={"app-frame" + (sidebarOpen ? "" : " sidebar-collapsed") + (inspectorOpen ? "" : " inspector-collapsed") + (surface === "science" ? " science-mode" : "")}>
       <aside className="primary-sidebar" aria-label={language === "fr" ? "Navigation principale" : "Primary navigation"}>
         <div className="sidebar-brand">
           <button className="brand-button" type="button" onClick={startNewChat} aria-label={language === "fr" ? "Nouvelle discussion" : "New chat"}>
-            <span className="brand-glyph"><Bot size={17} /></span>
+            <span className="brand-glyph"><Command size={17} /></span>
             <span>Shoko's LLM</span>
           </button>
           <button className="icon-button sidebar-collapse" type="button" onClick={() => setSidebarOpen(false)} aria-label={language === "fr" ? "Réduire la navigation" : "Collapse navigation"}>
@@ -669,25 +669,44 @@ export function mcpMarkdown(output: Record<string, unknown>): string | null {
 
 function ScienceWorkbench({ projects, language }: { projects: ProjectRecord[] | null; language: Language }) {
   const [panel, setPanel] = useState<"figures" | "notebook" | "evidence" | "artifacts">("figures");
+  const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
+  const projectLabel = activeProjects[0]?.name ?? (language === "fr" ? "Projet scientifique local" : "Local science project");
   return (
     <section className="science-workbench">
       <div className="science-titlebar">
-        <div><p>{language === "fr" ? "Espace scientifique local" : "Local science workspace"}</p><h2>{language === "fr" ? "Analyse et artefacts" : "Analysis and artifacts"}</h2></div>
+        <div className="science-document-title"><FolderKanban size={15} /><div><h2>{projectLabel}</h2><p>{language === "fr" ? "Figures, notebooks et preuves locales" : "Local figures, notebooks, and evidence"}</p></div></div>
         <div className="science-panel-switch" role="group" aria-label={language === "fr" ? "Vue scientifique" : "Science view"}>
           <button type="button" aria-pressed={panel === "figures"} onClick={() => setPanel("figures")}><ChartScatter size={15} />Figures</button>
           <button type="button" aria-pressed={panel === "notebook"} onClick={() => setPanel("notebook")}><Code2 size={15} />Notebook</button>
           <button type="button" aria-pressed={panel === "evidence"} onClick={() => setPanel("evidence")}><FlaskConical size={15} />{language === "fr" ? "Preuves" : "Evidence"}</button>
           <button type="button" aria-pressed={panel === "artifacts"} onClick={() => setPanel("artifacts")}><FileStack size={15} />{language === "fr" ? "Artefacts" : "Artifacts"}</button>
         </div>
+        <div className="science-boundary"><ShieldCheck size={14} /><span>{language === "fr" ? "Local" : "Local"}</span></div>
       </div>
       <div className="science-view">
         {panel === "figures" && <ScientificFigureWorkbench projects={projects} language={language} />}
-        {panel === "notebook" && <div className="science-single-view"><KernelSurface projects={projects} /></div>}
+        {panel === "notebook" && <ScienceNotebookSurface projects={projects} language={language} />}
         {panel === "evidence" && <div className="science-evidence-view"><ScienceSurface /><ReviewerSurface /></div>}
         {panel === "artifacts" && <div className="science-evidence-view"><ArtifactsSurface /><AnnotationSurface /></div>}
       </div>
     </section>
   );
+}
+
+function ScienceNotebookSurface({ projects, language }: { projects: ProjectRecord[] | null; language: Language }) {
+  const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
+  return <div className="science-notebook-view">
+    <aside className="science-notebook-context">
+      <div className="surface-mark">{language === "fr" ? "SESSION" : "SESSION"}</div>
+      <h3>{language === "fr" ? "Notebook du projet" : "Project notebook"}</h3>
+      <p>{language === "fr" ? "Le code, les sorties et les artefacts restent liés au projet sélectionné." : "Code, output, and artifacts remain attached to the selected project."}</p>
+      <div className="science-project-list">
+        {activeProjects.map(project => <div key={project.id}><FolderKanban size={14} /><span>{project.name}</span></div>)}
+        {activeProjects.length === 0 && <div><CircleAlert size={14} /><span>{language === "fr" ? "Créez un projet pour démarrer un kernel." : "Create a project to start a kernel."}</span></div>}
+      </div>
+    </aside>
+    <div className="science-notebook-kernel"><KernelSurface projects={projects} /></div>
+  </div>;
 }
 
 function ReviewerSurface() { const language = localStorage.getItem("frontier-language") === "fr" ? "fr" : "en"; const [findings, setFindings] = useState<Array<{ claim_id: string; code: string; severity: string; message: string }> | null>(null); const [error, setError] = useState<string | null>(null); async function review() { try { setError(null); setFindings((await invoke<{ findings: Array<{ claim_id: string; code: string; severity: string; message: string }> }>("review_scientific_claims_development")).findings); } catch (reason) { setError(reason instanceof Error ? reason.message : surfaceText(language, "reviewer")); } } useEffect(() => { void review(); }, []); return <section className="surface review-panel"><div className="surface-mark">EVIDENCE REVIEW</div><h2>{findings ? `${findings.length} ${surfaceText(language, findings.length === 1 ? "openFindingOne" : "openFindingMany")}` : surfaceText(language, "reviewer")}</h2><p>Findings identify missing evidence. They do not rerun analyses or grant scientific approval.</p>{error && <p className="agent-error">{error}</p>}{findings && <Evidence rows={findings.length ? findings.map(finding => `${finding.severity}: ${finding.code} · claim ${finding.claim_id} · ${finding.message}`) : [surfaceText(language, "noEvidenceGaps")]} />}<button className="action" onClick={() => void review()}>Run evidence review</button></section>; }
