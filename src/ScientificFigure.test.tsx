@@ -23,4 +23,13 @@ describe("ScientificFigureView", () => {
     expect(html).not.toContain("<img");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("starts with a dense local atlas instead of an empty canvas", () => {
+    const figure = JSON.parse(figureTemplates.scatter) as ScientificFigureData;
+    const html = renderToStaticMarkup(<ScientificFigureView figure={figure} onSelect={() => undefined} />);
+
+    expect(figure.title).toBe("Cross-species cell atlas");
+    expect(figure.points?.length).toBe(318);
+    expect(html).toContain("Cross-species cell atlas");
+  });
 });
