@@ -18,6 +18,11 @@ REQUIRED_FILES = (
 REQUIRED_AREAS = ("Runtime packs", "Science cloud storage", "Multimodal attachments", "Delegation", "Windows package")
 
 
+def lock_hash(path: Path) -> str:
+    normalized = path.read_text(encoding="utf-8").replace("\r\n", "\n").encode("utf-8")
+    return hashlib.sha256(normalized).hexdigest()
+
+
 def run_gate(root: Path, *, require_clean: bool = True) -> dict[str, object]:
     checks: list[dict[str, object]] = []
     missing = [path for path in REQUIRED_FILES if not (root / path).is_file()]
@@ -43,7 +48,7 @@ def run_gate(root: Path, *, require_clean: bool = True) -> dict[str, object]:
         properties = {item["name"]: item["value"] for item in sbom["metadata"]["properties"]}
         locks = ("pnpm-lock.yaml", "src-tauri/Cargo.lock", "requirements-build.txt")
         sbom_current = sbom["bomFormat"] == "CycloneDX" and sbom["specVersion"] == "1.6" and len(sbom["components"]) > 100 and all(
-            properties.get(f"shoko:lock-sha256:{relative}") == hashlib.sha256((root / relative).read_bytes()).hexdigest() for relative in locks
+            properties.get(f"shoko:lock-sha256:{relative}") == lock_hash(root / relative) for relative in locks
         )
     except (OSError, KeyError, TypeError, json.JSONDecodeError):
         sbom_current = False

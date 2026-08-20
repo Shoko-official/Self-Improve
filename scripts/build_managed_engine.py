@@ -79,8 +79,19 @@ def isolated_build_python(root: Path) -> Path:
 def copy_runtime_licenses(root: Path, build_python: Path) -> list[str]:
     destination = root / "runtime-packs" / "managed-engine" / "licenses"
     destination.mkdir(parents=True, exist_ok=True)
-    python_license = Path(sys.base_prefix) / "LICENSE.txt"
-    if not python_license.is_file():
+    python_license = next(
+        (
+            candidate
+            for candidate in (
+                Path(sys.base_prefix) / "LICENSE.txt",
+                Path(sys.base_prefix) / "LICENSE",
+                root / "licenses" / f"CPYTHON-{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}-LICENSE.txt",
+            )
+            if candidate.is_file()
+        ),
+        None,
+    )
+    if python_license is None:
         raise RuntimeError("FR-BUNDLE-PYTHON-LICENSE-MISSING")
     shutil.copyfile(python_license, destination / "PYTHON-LICENSE.txt")
     finder = "import importlib.metadata as m; d=m.distribution('pyinstaller'); print(next(str(d.locate_file(f)) for f in d.files if str(f).replace('\\\\','/').endswith('licenses/COPYING.txt')))"

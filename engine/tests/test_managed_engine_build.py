@@ -26,3 +26,9 @@ class ManagedEngineBuildTests(unittest.TestCase):
             self.assertEqual(result, stored)
             self.assertEqual(stored["executable"], "frontier-engine.exe")
             self.assertEqual(stored["sha256"], hashlib.sha256(executable.read_bytes()).hexdigest())
+
+    def test_repository_carries_the_ci_python_license(self) -> None:
+        root = Path(__file__).parents[2]
+        license_path = root / "licenses" / "CPYTHON-3.12.14-LICENSE.txt"
+        self.assertTrue(license_path.is_file())
+        self.assertIn("PYTHON SOFTWARE FOUNDATION LICENSE VERSION 2", license_path.read_text(encoding="utf-8"))

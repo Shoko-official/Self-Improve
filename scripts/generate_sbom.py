@@ -14,7 +14,8 @@ from urllib.parse import quote
 
 
 def _hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    normalized = path.read_text(encoding="utf-8").replace("\r\n", "\n").encode("utf-8")
+    return hashlib.sha256(normalized).hexdigest()
 
 
 def _component(component_type: str, group: str, name: str, version: str, ecosystem: str, license_expression: str | None = None, hashes: list[dict[str, str]] | None = None) -> dict[str, object]:

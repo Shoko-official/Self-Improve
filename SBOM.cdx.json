@@ -13644,7 +13644,7 @@
     "properties": [
       {
         "name": "shoko:lock-sha256:pnpm-lock.yaml",
-        "value": "852d25c8867719b37afbf8eb992384cdf2647fd2952b3efefa894027f4f7388d"
+        "value": "9b464abcbdfd517588b5f18f8424ddb716c6d7f078d4946cf2a1a539a20dadda"
       },
       {
         "name": "shoko:lock-sha256:src-tauri/Cargo.lock",

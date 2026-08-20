@@ -21,7 +21,7 @@ Unsigned artifacts are development evidence, not a trusted distribution channel.
 
 ## Validation
 
-- Python engine: 178 tests passed
+- Python engine: 179 tests passed
 - React interface: 16 tests passed
 - Rust managed boundary: 3 tests passed
 - Frontend production build: passed
