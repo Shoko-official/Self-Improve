@@ -71,6 +71,22 @@ class ModelRegistryTests(unittest.TestCase):
             self.assertEqual(registry.list()[0]["format"], "gguf")
             registry.close()
 
+    def test_external_gguf_reference_is_idempotent_and_does_not_copy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            library = root / "lm-studio" / "model.gguf"
+            library.parent.mkdir()
+            library.write_bytes(b"external-model")
+            registry = ModelRegistry(root / "models.sqlite3")
+            first = registry.reference_external(library)
+            second = registry.reference_external(library)
+            self.assertEqual(first["id"], second["id"])
+            self.assertEqual(first["path"], str(library.resolve()))
+            self.assertEqual(first["capability_state"], "external-reference")
+            self.assertEqual(first["sha256"], "pending-first-load")
+            self.assertEqual(list(root.rglob("*.gguf")), [library])
+            registry.close()
+
     def test_hub_search_download_hash_and_register_are_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory); destination = root / "models" / "model.gguf"

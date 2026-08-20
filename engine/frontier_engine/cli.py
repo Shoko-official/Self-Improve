@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import threading
@@ -24,13 +25,14 @@ from frontier_engine.claims import ClaimLedger
 from frontier_engine.literature import LiteratureStore
 from frontier_engine.loopback import LoopbackService
 from frontier_engine.model_registry import HuggingFaceHub, ModelRegistry
+from frontier_engine.managed_gguf import install_managed_gguf, probe_managed_gguf
 from frontier_engine.model_transfers import MODEL_TRANSFER_OPERATION, create_model_transfer, run_model_transfer
 from frontier_engine.environments import create_python_environment, create_r_environment, install_python_packages, install_r_packages, list_manifests, probe_environment
 from frontier_engine.generation import run_generation
 from frontier_engine.inference import plan_ollama_inference
 from frontier_engine.integration_registry import IntegrationLedger, call_mcp_tool, discover_extensions, discover_skills, probe_mcp_servers
 from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
-from frontier_engine.runtimes import stream_ollama, warmup_ollama
+from frontier_engine.runtimes import probe_lm_studio_library, probe_ollama, stream_ollama, warmup_ollama
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer, execute_s3_signed_transfer
@@ -252,6 +254,66 @@ def revoke_project_folder(root: Path, grant_id: str) -> dict[str, object]:
     return {"id": grant_id, "revoked": True}
 
 
+def project_git_context(root: Path, project_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        store.require_active_project(project_id)
+        grants = [grant for grant in store.project_folder_grants(project_id) if grant["revoked_at"] is None]
+    finally:
+        store.close()
+    if not grants:
+        return {"linked": False, "project_id": project_id}
+    folder = Path(str(grants[0]["path"]))
+    try:
+        repository_root = Path(_git(folder, "rev-parse", "--show-toplevel")).resolve(strict=True)
+        repository_root.relative_to(folder.resolve(strict=True))
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return {"linked": True, "repository": False, "path": str(folder), "reason": "FR-PROJECT-GIT-REPOSITORY-NOT-AVAILABLE"}
+    branch = _git(repository_root, "branch", "--show-current") or "HEAD"
+    status_lines = [line for line in _git(repository_root, "status", "--short").splitlines() if line]
+    remote = _git(repository_root, "config", "--get", "remote.origin.url", required=False)
+    ci = _github_ci_context(remote, branch)
+    return {
+        "linked": True,
+        "repository": True,
+        "path": str(repository_root),
+        "branch": branch,
+        "changes": len(status_lines),
+        "status": status_lines[:50],
+        "remote": remote or None,
+        "ci": ci,
+    }
+
+
+def _git(folder: Path, *arguments: str, required: bool = True) -> str:
+    result = subprocess.run(["git", "-C", str(folder), *arguments], capture_output=True, text=True, timeout=5)
+    if required and result.returncode != 0:
+        raise subprocess.CalledProcessError(result.returncode, result.args, result.stdout, result.stderr)
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def _github_ci_context(remote: str, branch: str) -> dict[str, object]:
+    executable = shutil.which("gh")
+    repository = _github_repository(remote)
+    if executable is None or repository is None:
+        return {"available": False, "reason": "FR-GITHUB-CI-NOT-CONNECTED"}
+    try:
+        result = subprocess.run([executable, "run", "list", "--repo", repository, "--branch", branch, "--limit", "1", "--json", "status,conclusion,name,url,updatedAt"], capture_output=True, text=True, timeout=8, check=True)
+        records = json.loads(result.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return {"available": False, "reason": "FR-GITHUB-CI-UNAVAILABLE"}
+    return {"available": True, "latest": records[0] if isinstance(records, list) and records else None}
+
+
+def _github_repository(remote: str) -> str | None:
+    normalized = remote.strip().removesuffix(".git")
+    for prefix in ("https://github.com/", "http://github.com/", "git@github.com:", "ssh://git@github.com/"):
+        if normalized.startswith(prefix):
+            candidate = normalized.removeprefix(prefix)
+            return candidate if candidate.count("/") == 1 else None
+    return None
+
+
 def jobs(root: Path) -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -333,6 +395,27 @@ def install_ollama_model(root: Path, project_id: str, model: str) -> dict[str, o
         return install_local_ollama_model(store, project_id, model)
     finally:
         store.close()
+
+
+def local_model_catalog(root: Path | None = None) -> dict[str, object]:
+    return {"shoko_gguf": probe_managed_gguf(root or data_root()), "ollama": probe_ollama(), "lm_studio_library": probe_lm_studio_library()}
+
+
+def install_shoko_gguf_runtime(root: Path) -> dict[str, object]:
+    return install_managed_gguf(root)
+
+
+def reference_lm_studio_model(root: Path, path: Path) -> dict[str, object]:
+    catalog = probe_lm_studio_library()
+    allowed = {Path(str(item["path"])).resolve() for item in catalog.get("models", []) if isinstance(item, dict) and item.get("path")}
+    resolved = path.resolve()
+    if resolved not in allowed:
+        raise ValueError("FR-LM-STUDIO-MODEL-OUTSIDE-LIBRARY")
+    registry = ModelRegistry(root / "models.sqlite3")
+    try:
+        return {"model": registry.reference_external(resolved), "copied": False, "source": "lmstudio-library"}
+    finally:
+        registry.close()
 
 
 def search_huggingface_models(query: str, limit: int = 10) -> dict[str, object]:
@@ -535,12 +618,16 @@ def workspace_tool(root: Path, project_id: str, workspace: Path, action: str, re
         agent.close(); store.close()
 
 
-def run_agent(root: Path, project_id: str, model: str, prompt: str, skill_ids: list[str] | None = None) -> dict[str, object]:
+def run_agent(root: Path, project_id: str, model: str, prompt: str, skill_ids: list[str] | None = None, access_mode: str = "ask", reasoning_effort: str = "standard", work_mode: str = "chat") -> dict[str, object]:
     store = FrontierStore(root)
-    try: store.require_active_project(project_id)
-    finally: store.close()
+    try:
+        store.require_active_project(project_id)
+        project = store.connection.execute("SELECT name, instructions FROM projects WHERE id = ?", (project_id,)).fetchone()
+        folders = [str(grant["path"]) for grant in store.project_folder_grants(project_id) if grant["revoked_at"] is None]
+    finally:
+        store.close()
     state = AgentStateStore(root / "agent.sqlite3")
-    try: return run_local_agent(state, project_id, model, prompt, skill_ids=skill_ids)
+    try: return run_local_agent(state, project_id, model, prompt, skill_ids=skill_ids, access_mode=access_mode, reasoning_effort=reasoning_effort, runtime_root=root, project_name=str(project["name"]), project_instructions=str(project["instructions"]), folders=folders, work_mode=work_mode)
     finally: state.close()
 
 
@@ -798,7 +885,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -836,6 +923,7 @@ def main() -> None:
     parser.add_argument("--parent-session-id")
     parser.add_argument("--instructions")
     parser.add_argument("--reasoning-effort", choices=("compact", "standard", "extended"), default="standard")
+    parser.add_argument("--work-mode", choices=("chat", "plan", "science"), default="chat")
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
     parser.add_argument("--working-directory", type=Path)
@@ -853,6 +941,7 @@ def main() -> None:
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--external-approved", action="store_true")
     parser.add_argument("--skill-id", action="append")
+    parser.add_argument("--access-mode", choices=("read", "ask", "full"), default="ask")
     parser.add_argument("--mcp-server-id")
     parser.add_argument("--mcp-tool-name")
     parser.add_argument("--mcp-arguments", default="{}")
@@ -1027,6 +1116,10 @@ def main() -> None:
         if args.folder_grant_id is None:
             parser.error("revoke-project-folder requires --folder-grant-id")
         result = revoke_project_folder(root, args.folder_grant_id)
+    elif args.command == "project-git-context":
+        if args.project_id is None:
+            parser.error("project-git-context requires --project-id")
+        result = project_git_context(root, args.project_id)
     elif args.command == "jobs":
         if args.project_id is None or args.operation is None:
             result = jobs(root)
@@ -1079,7 +1172,7 @@ def main() -> None:
     elif args.command == "agent-run":
         if args.project_id is None or args.model is None or args.prompt is None:
             parser.error("agent-run requires --project-id, --model, and --prompt")
-        result = run_agent(root, args.project_id, args.model, args.prompt, args.skill_id)
+        result = run_agent(root, args.project_id, args.model, args.prompt, args.skill_id, args.access_mode, args.reasoning_effort, args.work_mode)
     elif args.command == "agent-activity":
         if args.project_id is None:
             parser.error("agent-activity requires --project-id")
@@ -1102,6 +1195,16 @@ def main() -> None:
         if args.project_id is None or args.model is None:
             parser.error("install-ollama-model requires --project-id and --model")
         result = install_ollama_model(root, args.project_id, args.model)
+    elif args.command == "install-shoko-gguf-runtime":
+        result = install_shoko_gguf_runtime(root)
+    elif args.command == "lmstudio-library":
+        result = probe_lm_studio_library()
+    elif args.command == "local-model-catalog":
+        result = local_model_catalog(root)
+    elif args.command == "reference-lmstudio-model":
+        if args.path is None:
+            parser.error("reference-lmstudio-model requires --path")
+        result = reference_lm_studio_model(root, Path(args.path))
     elif args.command == "model-search":
         if args.query is None:
             parser.error("model-search requires --query")

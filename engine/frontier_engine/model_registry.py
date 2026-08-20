@@ -253,6 +253,18 @@ class ModelRegistry:
         if not path.is_file(): raise FileNotFoundError(f"Model file not found: {path}")
         return self._register_verified(path, _sha256_file(path))
 
+    def reference_external(self, path: Path) -> dict[str, object]:
+        path = path.resolve()
+        if not path.is_file() or path.suffix.lower() != ".gguf":
+            raise ValueError("FR-MODEL-REFERENCE: an existing GGUF file is required")
+        existing = self.connection.execute("SELECT * FROM local_models WHERE path = ?", (str(path),)).fetchone()
+        if existing is not None:
+            return dict(existing)
+        record = {"id": str(uuid.uuid4()), "path": str(path), "sha256": "pending-first-load", "bytes": path.stat().st_size, "format": "gguf", "capability_state": "external-reference"}
+        self.connection.execute("INSERT INTO local_models VALUES (:id, :path, :sha256, :bytes, :format, :capability_state)", record)
+        self.connection.commit()
+        return record
+
     def _register_verified(self, path: Path, digest: str) -> dict[str, object]:
         extension = path.suffix.removeprefix(".").lower() or "unknown"
         record = {"id": str(uuid.uuid4()), "path": str(path), "sha256": digest, "bytes": path.stat().st_size, "format": extension, "capability_state": "unvalidated"}

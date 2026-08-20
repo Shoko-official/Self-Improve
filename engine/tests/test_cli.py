@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, plan_huggingface_model_download, project_folders, projects, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
+from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, plan_huggingface_model_download, project_folders, project_git_context, projects, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -96,6 +96,22 @@ class CliTests(unittest.TestCase):
             self.assertEqual(project_folders(root, project["id"])["grants"][0]["path"], str(folder.resolve()))
             self.assertTrue(revoke_project_folder(root, grant["id"])["revoked"])
 
+    def test_project_git_context_reports_branch_and_worktree_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "state"
+            repository = Path(temp_dir) / "repository"
+            repository.mkdir()
+            subprocess.run(["git", "init", "-b", "main", str(repository)], check=True, capture_output=True)
+            (repository / "note.txt").write_text("untracked", encoding="utf-8")
+            project = create_project(root, "Git")
+            self.assertFalse(project_git_context(root, project["id"])["linked"])
+            grant_project_folder(root, project["id"], repository, "read")
+            context = project_git_context(root, project["id"])
+            self.assertTrue(context["repository"])
+            self.assertEqual(context["branch"], "main")
+            self.assertEqual(context["changes"], 1)
+            self.assertFalse(context["ci"]["available"])
+
     def test_jobs_can_be_enqueued_listed_and_cancelled(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -129,6 +145,21 @@ class CliTests(unittest.TestCase):
                 record = install_ollama_model(root, project_id, "qwen3")
             install.assert_called_once()
             self.assertEqual(record["state"], "failed")
+
+    def test_lm_studio_library_is_referenced_without_copy_or_runtime_dependency(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model = root / "library" / "model.gguf"
+            model.parent.mkdir()
+            model.write_bytes(b"gguf")
+            library = {"available": True, "models_root": str(model.parent), "models": [{"path": str(model)}]}
+            with patch("frontier_engine.cli.probe_lm_studio_library", return_value=library), patch("frontier_engine.cli.probe_ollama", return_value={"available": False, "models": []}):
+                self.assertEqual(local_model_catalog()["lm_studio_library"], library)
+                result = reference_lm_studio_model(root, model)
+            self.assertFalse(result["copied"])
+            self.assertEqual(result["source"], "lmstudio-library")
+            self.assertEqual(result["model"]["path"], str(model.resolve()))
+            self.assertEqual(list(root.rglob("*.gguf")), [model])
 
     def test_huggingface_commands_keep_network_transfer_explicit(self) -> None:
         with patch("frontier_engine.cli.HuggingFaceHub") as hub_type:

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CircleAlert, Cpu, Download, FileCheck2, Gauge, HardDrive, RefreshCw, Search, ShieldCheck, Square, Thermometer } from "lucide-react";
+import { CircleAlert, Cpu, Download, FileCheck2, Gauge, HardDrive, Link2, RefreshCw, Search, ShieldCheck, Square, Thermometer } from "lucide-react";
 import type { Language } from "./i18n";
 
 type CapabilityReport = { operatingSystem: string; architecture: string; logicalCores: number; capturedAt: number };
@@ -57,6 +57,9 @@ type WarmupResult = {
     loaded: { context_length?: number; size_vram?: number; expires_at?: string };
   };
 };
+type LibraryModel = { key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string };
+type LmStudioLibrary = { source: string; available: boolean; reason: string | null; models_root: string; models: LibraryModel[] };
+type ManagedRuntime = { runtime: string; available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean };
 
 type ModelsSurfaceProps = {
   report: CapabilityReport | null;
@@ -127,6 +130,12 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
   const [inspectingInference, setInspectingInference] = useState(false);
   const [warmingModel, setWarmingModel] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [view, setView] = useState<"library" | "download" | "performance">("library");
+  const [lmStudioLibrary, setLmStudioLibrary] = useState<LmStudioLibrary | null>(null);
+  const [managedRuntime, setManagedRuntime] = useState<ManagedRuntime | null>(null);
+  const [installingManagedRuntime, setInstallingManagedRuntime] = useState(false);
+  const [referencedPaths, setReferencedPaths] = useState<Set<string>>(() => new Set());
+  const [referencingPath, setReferencingPath] = useState<string | null>(null);
   const progress = useMemo(() => latestProgress(transfer), [transfer]);
   const isTransferActive = transfer ? !terminalStates.has(transfer.state) : false;
   const destinationExample = report?.operatingSystem === "windows" ? "D:\\Models\\model.gguf" : report?.operatingSystem === "macos" ? "/Users/name/Models/model.gguf" : "/home/name/Models/model.gguf";
@@ -134,6 +143,12 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
   useEffect(() => {
     if (!projectId && activeProjects[0]) setProjectId(activeProjects[0].id);
   }, [activeProjects, projectId]);
+
+  useEffect(() => {
+    void invoke<{ shoko_gguf: ManagedRuntime; lm_studio_library: LmStudioLibrary }>("local_model_catalog_development")
+      .then(result => { setLmStudioLibrary(result.lm_studio_library); setManagedRuntime(result.shoko_gguf); })
+      .catch(() => { setLmStudioLibrary(null); setManagedRuntime(null); });
+  }, []);
 
   useEffect(() => {
     if (!transfer || terminalStates.has(transfer.state)) return;
@@ -279,11 +294,61 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
     }
   }
 
+  async function referenceLibraryModel(path: string) {
+    setReferencingPath(path);
+    setModelError(null);
+    try {
+      await invoke("reference_lm_studio_model_development", { path });
+      setReferencedPaths(current => new Set(current).add(path));
+    } catch (reason) {
+      setModelError(message(reason, language === "fr" ? "Le modèle n'a pas pu être référencé." : "The model could not be referenced."));
+    } finally {
+      setReferencingPath(null);
+    }
+  }
+
+  async function installManagedRuntime() {
+    setInstallingManagedRuntime(true);
+    setModelError(null);
+    try {
+      setManagedRuntime(await invoke<ManagedRuntime>("install_shoko_gguf_runtime_development"));
+    } catch (reason) {
+      setModelError(message(reason, language === "fr" ? "Le moteur GGUF Shoko n'a pas pu être installé." : "The Shoko GGUF engine could not be installed."));
+    } finally {
+      setInstallingManagedRuntime(false);
+    }
+  }
+
   return (
     <section className="surface models-surface">
       <div className="surface-mark">{language === "fr" ? "ACQUISITION VÉRIFIÉE" : "VERIFIED ACQUISITION"}</div>
       <h2>{language === "fr" ? "Modèles locaux" : "Local models"}</h2>
-      <p>{language === "fr" ? "Inspectez la taille, le disque et le backend avant de transférer un fichier précis. Chaque transfert conserve un journal durable." : "Inspect size, disk, and backend before transferring one exact file. Every transfer keeps a durable record."}</p>
+      <p>{language === "fr" ? "Utilisez les modèles déjà présents, téléchargez-en un nouveau ou inspectez les performances du moteur local." : "Use models already on this machine, download a new one, or inspect local runtime performance."}</p>
+      <div className="model-view-tabs" role="group" aria-label={language === "fr" ? "Vue des modèles" : "Model view"}>
+        <button type="button" aria-pressed={view === "library"} onClick={() => setView("library")}>{language === "fr" ? "Bibliothèque" : "Library"}</button>
+        <button type="button" aria-pressed={view === "download"} onClick={() => setView("download")}>{language === "fr" ? "Télécharger" : "Download"}</button>
+        <button type="button" aria-pressed={view === "performance"} onClick={() => setView("performance")}>{language === "fr" ? "Performance" : "Performance"}</button>
+      </div>
+
+      {view === "library" && <>
+      {lmStudioLibrary?.available && (
+        <section className="model-library" aria-labelledby="lm-studio-library-title">
+          <div className="model-library-heading">
+            <div className="model-section-heading"><HardDrive size={17} /><div><span>{language === "fr" ? "Bibliothèque détectée" : "Detected library"}</span><h3 id="lm-studio-library-title">LM Studio</h3></div></div>
+            <div className="model-library-runtime"><p>{language === "fr" ? "Shoko réutilise les fichiers GGUF existants par chemin. Aucun serveur ou moteur LM Studio n'est utilisé." : "Shoko reuses existing GGUF files by path. No LM Studio server or runtime is used."}</p>{managedRuntime?.available ? <span><ShieldCheck size={13} />{language === "fr" ? "Moteur Shoko prêt" : "Shoko engine ready"}</span> : managedRuntime?.reason === "FR-SHOKO-GGUF-RUNTIME-WINDOWS-INTEGRITY-BLOCKED" ? <span><CircleAlert size={13} />{language === "fr" ? "Runtime officiel bloqué par l'intégrité Windows" : "Official runtime blocked by Windows integrity"}</span> : <button className="minor-action" type="button" disabled={installingManagedRuntime} onClick={() => void installManagedRuntime()}><Download size={13} />{installingManagedRuntime ? (language === "fr" ? "Installation" : "Installing") : (language === "fr" ? "Installer le moteur Shoko" : "Install Shoko engine")}</button>}</div>
+          </div>
+          <div className="model-library-list">
+            {lmStudioLibrary.models.map(model => {
+              const referenced = referencedPaths.has(model.path);
+              return <div className="model-library-row" key={model.path}>
+                <div><strong>{model.display_name}</strong><span>{formatBytes(model.size_bytes, language)} · {model.key}</span></div>
+                <button className="minor-action" type="button" disabled={!managedRuntime?.available || referenced || referencingPath === model.path} onClick={() => void referenceLibraryModel(model.path)}><Link2 size={13} />{referenced ? (language === "fr" ? "Prêt" : "Ready") : referencingPath === model.path ? (language === "fr" ? "Connexion" : "Connecting") : (language === "fr" ? "Utiliser dans Shoko" : "Use in Shoko")}</button>
+              </div>;
+            })}
+          </div>
+          <p className="model-library-path">{lmStudioLibrary.models_root}</p>
+        </section>
+      )}
 
       <div className="model-host-grid">
         <section aria-labelledby="host-capability-title">
@@ -303,7 +368,9 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
           <button className="minor-action" type="button" onClick={() => void probeEngine()}><RefreshCw size={14} />{language === "fr" ? "Vérifier le moteur" : "Check engine"}</button>
         </section>
       </div>
+      </>}
 
+      {view === "download" && <>
       <div className="model-workflow-grid">
         <div className="model-source-column">
           <form className="project-form" onSubmit={search}>
@@ -396,7 +463,9 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
         {ollamaInstall && <div className="transfer-success"><FileCheck2 size={16} /><div><strong>{language === "fr" ? "Journal Ollama" : "Ollama record"}: {ollamaInstall.state}</strong><span>{ollamaInstall.result ? ollamaInstall.result.model : (ollamaInstall.diagnostic?.code ?? ollamaInstall.id)}</span></div></div>}
         <p className="development-note">{language === "fr" ? "Un fichier téléchargé reste non validé pour l'inférence tant qu'un runtime compatible ne l'a pas chargé." : "A downloaded file remains unvalidated for inference until a compatible runtime loads it."}</p>
       </div>
+      </>}
 
+      {view === "performance" && (
       <div className="engine-report model-runtime-section">
         <div className="surface-mark">{language === "fr" ? "PROFIL MESURÉ" : "MEASURED PROFILE"}</div>
         <h2>{language === "fr" ? "Planifier et préchauffer Ollama" : "Plan and warm up Ollama"}</h2>
@@ -437,6 +506,7 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
           </section>
         </div>
       </div>
+      )}
 
       {modelError && <div className="model-error" role="alert"><CircleAlert size={17} /><div><strong>{language === "fr" ? "Action interrompue" : "Action stopped"}</strong><p>{modelError}</p></div></div>}
     </section>
