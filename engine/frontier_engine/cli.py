@@ -704,6 +704,17 @@ def agent_activity(root: Path, project_id: str) -> dict[str, object]:
         }
     finally: state.close()
 
+def manage_todo(root: Path, project_id: str, todo_id: str, action: str, text: str | None = None) -> dict[str, object]:
+    state = AgentStateStore(root / "agent.sqlite3")
+    try:
+        if action == "update":
+            if text is None: raise ValueError("FR-TODO-TEXT-REQUIRED")
+            state.update_todo(todo_id, text)
+        elif action == "delete": state.delete_todo(todo_id)
+        else: state.transition_todo(todo_id, action)
+        return {"todos": [todo.__dict__ for todo in state.todos(project_id)]}
+    finally: state.close()
+
 
 def artifacts(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
