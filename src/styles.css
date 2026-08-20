@@ -5,48 +5,48 @@
   background: #efefec;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --app-bg: #efefec;
-  --sidebar-bg: #e7e7e3;
-  --panel-bg: #f7f7f4;
-  --raised-bg: #fcfcfa;
-  --subtle-bg: #ebebe7;
-  --hover-bg: #e2e2dd;
-  --selected-bg: #dedde8;
-  --border: #d3d3cd;
-  --border-strong: #bdbdb6;
-  --text: #26272a;
-  --text-soft: #5e6065;
-  --text-faint: #777980;
-  --accent: #615d93;
-  --accent-soft: #e6e4f1;
+  --app-bg: #eef0ed;
+  --sidebar-bg: #e7e9e6;
+  --panel-bg: #f5f6f3;
+  --raised-bg: #fafbf8;
+  --subtle-bg: #eaede9;
+  --hover-bg: #dfe3df;
+  --selected-bg: #dce4e0;
+  --border: #cfd4cf;
+  --border-strong: #b8bfba;
+  --text: #252827;
+  --text-soft: #5c6461;
+  --text-faint: #747c79;
+  --accent: #426f67;
+  --accent-soft: #dce9e4;
   --danger: #9b3f48;
   --danger-soft: #f4e4e5;
   --code-bg: #e7e7e3;
-  --focus: #645f9d;
+  --focus: #426f67;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
   color: #ecece8;
   background: #1b1c1e;
-  --app-bg: #1b1c1e;
-  --sidebar-bg: #17181a;
-  --panel-bg: #202123;
-  --raised-bg: #28292c;
-  --subtle-bg: #242528;
-  --hover-bg: #2d2e31;
-  --selected-bg: #363442;
-  --border: #393a3d;
-  --border-strong: #4a4b50;
-  --text: #ecece8;
-  --text-soft: #b4b5b8;
-  --text-faint: #929398;
-  --accent: #aaa5d6;
-  --accent-soft: #343241;
+  --app-bg: #1a1c1b;
+  --sidebar-bg: #161817;
+  --panel-bg: #1f2221;
+  --raised-bg: #252826;
+  --subtle-bg: #222523;
+  --hover-bg: #292d2b;
+  --selected-bg: #2b3531;
+  --border: #363b38;
+  --border-strong: #49504c;
+  --text: #e9ece9;
+  --text-soft: #b1b8b4;
+  --text-faint: #8d9691;
+  --accent: #8eb2aa;
+  --accent-soft: #293a35;
   --danger: #e09399;
   --danger-soft: #3b292c;
   --code-bg: #18191b;
-  --focus: #b6afe9;
+  --focus: #9fc5bc;
 }
 
 * { box-sizing: border-box; }
@@ -209,24 +209,71 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .mcp-tool-output details summary { color: var(--text-faint); cursor: pointer; font-size: 10px; }
 .mcp-tool-output .agent-output { margin: 8px 0 0; }
 
-.science-workbench { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-columns: minmax(390px, .9fr) minmax(470px, 1.1fr); }
-.science-conversation, .science-inspector { min-width: 0; min-height: 0; overflow: auto; }
-.science-conversation { background: var(--app-bg); border-right: 1px solid var(--border); }
+.science-workbench { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel-bg); }
 .science-titlebar { position: sticky; z-index: 4; top: 0; justify-content: space-between; gap: 12px; padding: 14px 18px; background: var(--panel-bg); border-bottom: 1px solid var(--border); }
 .science-titlebar p, .science-titlebar h2 { margin: 0; }
 .science-titlebar p { color: var(--text-faint); font-size: 10px; }
 .science-titlebar h2 { margin-top: 2px; font-size: 15px; }
-.science-panel-switch { display: flex; gap: 3px; padding: 3px; background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 9px; }
-.science-panel-switch button { display: flex; align-items: center; gap: 6px; padding: 6px 8px; color: var(--text-soft); border-radius: 6px; font-size: 11px; }
+.science-panel-switch { display: flex; gap: 1px; }
+.science-panel-switch button { display: flex; align-items: center; gap: 6px; padding: 7px 9px; color: var(--text-soft); border-bottom-color: transparent; border-radius: 0; font-size: 11px; }
 .science-panel-switch button:hover { color: var(--text); }
-.science-panel-switch button[aria-pressed="true"] { color: var(--text); background: var(--raised-bg); border-color: var(--border); }
-.science-inspector { background: var(--panel-bg); }
-.science-inspector-header { position: sticky; z-index: 3; top: 0; gap: 9px; padding: 12px 14px; background: var(--panel-bg); border-bottom: 1px solid var(--border); }
-.science-file-icon { width: 29px; height: 29px; border-radius: 7px; }
-.science-inspector-header p, .science-inspector-header span { margin: 0; }
-.science-inspector-header p { font-size: 12px; font-weight: 650; }
-.science-inspector-header span { color: var(--text-faint); font-size: 10px; }
-.science-workbench .surface { width: auto; margin: 0; padding: 24px 22px; border-bottom: 1px solid var(--border); }
+.science-panel-switch button[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--accent); }
+.science-view { min-width: 0; min-height: 0; overflow: auto; }
+.science-single-view { width: min(920px, calc(100% - 48px)); margin: 0 auto; }
+.science-evidence-view { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .72fr); min-height: 100%; }
+.science-evidence-view > .surface + .surface { border-left: 1px solid var(--border); }
+.science-workbench .surface { width: auto; margin: 0; padding: 28px; }
+.figure-workbench { height: 100%; min-height: 640px; display: grid; grid-template-columns: minmax(520px, 1.55fr) minmax(310px, .65fr); background: var(--panel-bg); }
+.figure-editor, .figure-preview-pane { min-width: 0; }
+.figure-editor { padding: 18px; overflow: auto; background: var(--raised-bg); border-left: 1px solid var(--border); }
+.figure-preview-pane { display: flex; flex-direction: column; padding: 20px 24px 16px; overflow: auto; }
+.figure-editor-heading { display: flex; align-items: center; gap: 9px; padding-bottom: 13px; border-bottom: 1px solid var(--border); }
+.figure-editor-heading > svg { color: var(--text-faint); }
+.figure-editor-heading h3, .figure-editor-heading p { margin: 0; }
+.figure-editor-heading h3 { font-size: 13px; }
+.figure-editor-heading p { margin-top: 2px; color: var(--text-faint); font: 9px ui-monospace, "Cascadia Code", monospace; }
+.figure-editor form { display: grid; gap: 10px; margin-top: 14px; }
+.figure-editor label { display: grid; gap: 6px; color: var(--text-soft); font-size: 10px; font-weight: 650; }
+.figure-editor select, .figure-editor input, .figure-editor textarea, .figure-save-row select, .figure-save-row input { width: 100%; min-width: 0; padding: 8px 9px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 7px; }
+.figure-editor textarea { min-height: 300px; resize: vertical; font: 10px/1.5 ui-monospace, "Cascadia Code", monospace; tab-size: 2; }
+.figure-editor .action { width: fit-content; margin: 0; }
+.figure-save-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; margin-top: 10px; }
+.figure-save-row select { grid-column: 1 / -1; }
+.figure-save-row .minor-action { margin: 0; }
+.figure-status { margin: 10px 0 0; color: var(--text-soft); font-size: 11px; }
+.scientific-figure { flex: 1; min-height: 0; margin: 0; }
+.scientific-figure figcaption { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.scientific-figure figcaption > span { display: grid; width: 30px; height: 30px; place-items: center; color: var(--accent); background: var(--accent-soft); border-radius: 7px; }
+.scientific-figure figcaption h3, .scientific-figure figcaption p { margin: 0; }
+.scientific-figure figcaption h3 { font-size: 13px; }
+.scientific-figure figcaption p { margin-top: 3px; color: var(--text-faint); font-size: 10px; }
+.scientific-figure figcaption code { color: var(--text-faint); font-size: 9px; }
+.scientific-canvas { width: 100%; min-height: 480px; display: grid; place-items: center; overflow: auto; }
+.scientific-canvas svg { display: block; width: 100%; min-width: 540px; height: auto; color: var(--text); }
+.figure-grid { stroke: var(--border); stroke-width: 1; }
+.figure-axis, .figure-sequence-line { stroke: var(--text-faint); stroke-width: 1.2; }
+.figure-sequence-line { stroke-width: 4; stroke-linecap: round; }
+.figure-axis-label, .figure-tick, .figure-legend, .figure-note { fill: var(--text-faint); font-family: "Segoe UI Variable Text", "SF Pro Text", sans-serif; }
+.figure-axis-label { font-size: 12px; }
+.figure-tick, .figure-legend { font-size: 10px; }
+.figure-note { font-size: 9px; }
+.figure-mark, .figure-matrix-mark, .figure-feature { cursor: pointer; outline: none; }
+.figure-mark { stroke: var(--raised-bg); stroke-width: 1.5; }
+.figure-mark:hover, .figure-mark:focus-visible, .figure-matrix-mark:hover, .figure-matrix-mark:focus-visible, .figure-feature:hover, .figure-feature:focus-visible { stroke: var(--text); stroke-width: 2.5; }
+.figure-mark.selected, .figure-matrix-mark.selected, .figure-feature.selected rect { stroke: var(--accent); stroke-width: 3; }
+.figure-matrix-cell { fill: transparent; stroke: var(--border); stroke-width: 1; }
+.figure-matrix-mark { fill: var(--accent); stroke: var(--raised-bg); stroke-width: 1.5; }
+.figure-feature text { fill: #ffffff; font-size: 9px; font-weight: 650; pointer-events: none; }
+.figure-provenance { display: flex; flex-wrap: wrap; gap: 6px 12px; padding-top: 10px; color: var(--text-faint); border-top: 1px solid var(--border); font: 9px/1.4 ui-monospace, "Cascadia Code", monospace; }
+.figure-selection { display: flex; align-items: center; gap: 9px; margin-top: 10px; padding: 9px; background: var(--panel-bg); border: 1px solid var(--border); border-radius: 8px; }
+.figure-selection > svg { flex: 0 0 auto; color: var(--accent); }
+.figure-selection span, .figure-selection code { display: block; }
+.figure-selection span { color: var(--text-faint); font-size: 9px; }
+.figure-selection code { margin-top: 3px; font-size: 10px; overflow-wrap: anywhere; }
+.figure-empty { min-height: 100%; display: grid; align-content: center; justify-items: center; padding: 50px 18px; color: var(--text-soft); text-align: center; }
+.figure-empty svg { color: var(--text-faint); }
+.figure-empty h3 { margin: 10px 0 5px; color: var(--text); font-size: 13px; }
+.figure-empty p { max-width: 36ch; margin: 0 auto; font-size: 11px; line-height: 1.5; }
 .surface-mark { color: var(--text-faint); font: 650 10px ui-monospace, "Cascadia Code", monospace; letter-spacing: .07em; }
 .surface > h2 { margin: 8px 0 9px; font-size: 22px; letter-spacing: -.025em; }
 .surface > p { max-width: 720px; margin: 0; color: var(--text-soft); line-height: 1.6; }
@@ -238,6 +285,7 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .project-form label { color: var(--text-soft); font-size: 12px; font-weight: 650; }
 .project-form input, .project-form select, .project-form textarea { width: 100%; min-width: 0; padding: 9px 10px; background: var(--raised-bg); border: 1px solid var(--border); border-radius: 8px; }
 .project-form textarea { min-height: 94px; resize: vertical; line-height: 1.5; }
+.project-form > .action, .project-form > .minor-action { justify-self: start; }
 .kernel-editor { min-height: 190px !important; font: 12px/1.6 ui-monospace, "Cascadia Code", monospace; tab-size: 2; }
 .workspace-list, .claim-list { display: grid; gap: 7px; margin-top: 18px; }
 .workspace-row, .claim-row { padding: 12px; background: var(--raised-bg); border: 1px solid var(--border); border-radius: 9px; }
@@ -369,20 +417,25 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 
 @media (max-width: 1180px) {
   .workspace-grid { grid-template-columns: minmax(0, 1fr) 244px; }
-  .science-workbench { grid-template-columns: minmax(360px, .85fr) minmax(430px, 1.15fr); }
+  .figure-workbench { grid-template-columns: minmax(450px, 1.25fr) minmax(300px, .75fr); }
   .activity-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 1020px) {
   .app-frame { grid-template-columns: 214px minmax(0, 1fr); }
   .context-panel { display: none; }
   .workspace-grid { grid-template-columns: minmax(0, 1fr); }
-  .science-workbench { grid-template-columns: 1fr 1fr; }
+  .science-evidence-view { grid-template-columns: 1fr; }
+  .science-evidence-view > .surface + .surface { border-left: 0; border-top: 1px solid var(--border); }
+  .figure-workbench { height: auto; grid-template-columns: minmax(0, 1fr); }
+  .figure-preview-pane { min-height: 620px; }
+  .figure-editor { border-top: 1px solid var(--border); border-left: 0; }
   .registry-row { grid-template-columns: 34px minmax(0, 1fr); }
   .registry-row dl { grid-column: 2; }
   .model-workflow-grid { grid-template-columns: 1fr; }
   .inference-profile-grid { grid-template-columns: 1fr; }
   .automation-layout { grid-template-columns: 1fr; }
   .transfer-ledger { position: static; }
+  .figure-save-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
   .model-field-pair, .inference-field-grid, .automation-schedule, .automation-field-grid { grid-template-columns: 1fr; }

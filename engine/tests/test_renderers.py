@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from frontier_engine.renderers import render_preview
@@ -32,3 +33,28 @@ class RendererTests(unittest.TestCase):
 
     def test_notebook_preview_rejects_malformed_json(self) -> None:
         with self.assertRaisesRegex(ValueError, "FR-RENDERER-NOTEBOOK-INVALID-JSON"): render_preview("application/x-ipynb+json", "not json")
+
+    def test_scatter_figure_is_normalized_with_stable_point_selectors(self) -> None:
+        content = json.dumps({"version": 1, "kind": "scatter", "title": "Cell embedding", "points": [{"id": "cell-1", "x": 1, "y": 2.5, "category": "Neuron"}]})
+        result = render_preview("application/vnd.shokos.figure+json", content)
+        self.assertEqual(result["renderer_id"], "figure.scatter")
+        self.assertEqual(result["renderer_version"], "1")
+        self.assertEqual(result["selector_schema"], {"kind": "point", "field": "id"})
+        self.assertEqual(result["figure"]["points"][0]["id"], "cell-1")
+        self.assertEqual(len(result["source_sha256"]), 64)
+        self.assertEqual(result["execution"], "disabled")
+
+    def test_matrix_and_sequence_figures_preserve_exact_selectors(self) -> None:
+        matrix = render_preview("application/vnd.shokos.figure+json", json.dumps({"version": 1, "kind": "matrix", "title": "Markers", "rows": ["B cell"], "columns": ["CD79A"], "cells": [{"row": 0, "column": 0, "value": 0.8, "size": 0.6}]}))
+        sequence = render_preview("application/vnd.shokos.figure+json", json.dumps({"version": 1, "kind": "sequence", "title": "KRAS", "length": 189, "features": [{"id": "domain-1", "start": 10, "end": 166, "label": "Ras domain"}]}))
+        self.assertEqual(matrix["selector_schema"]["fields"], ["row", "column"])
+        self.assertEqual(sequence["figure"]["features"][0]["end"], 166)
+        self.assertEqual(sequence["selector_schema"], {"kind": "feature", "field": "id"})
+
+    def test_figure_renderer_rejects_unbounded_and_invalid_data(self) -> None:
+        with self.assertRaisesRegex(ValueError, "FR-RENDERER-FIGURE-SCHEMA"):
+            render_preview("application/vnd.shokos.figure+json", '{"version":1,"kind":"molecule"}')
+        with self.assertRaisesRegex(ValueError, "FR-RENDERER-FIGURE-DUPLICATE-ID"):
+            render_preview("application/vnd.shokos.figure+json", json.dumps({"version": 1, "kind": "scatter", "title": "Duplicate", "points": [{"id": "a", "x": 1, "y": 2}, {"id": "a", "x": 2, "y": 3}]}))
+        with self.assertRaisesRegex(ValueError, "FR-RENDERER-FIGURE-NUMBER"):
+            render_preview("application/vnd.shokos.figure+json", '{"version":1,"kind":"scatter","title":"Invalid","points":[{"id":"a","x":NaN,"y":2}]}')
