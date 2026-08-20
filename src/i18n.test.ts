@@ -5,6 +5,8 @@ describe("translate", () => {
   it("resolves the primary navigation in both supported languages", () => {
     expect(translate("en", "workspaces")).toBe("Workspaces");
     expect(translate("fr", "workspaces")).toBe("Espaces de travail");
+    expect(translate("fr", "models")).toBe("Modèles");
+    expect(translate("fr", "modelsCaption")).toBe("Preuves d'exécution");
   });
 
   it("resolves primary surface copy in both supported languages", () => {
