@@ -8,6 +8,31 @@ const messages = {
 export type MessageKey = keyof typeof messages.en;
 
 export function translate(language: Language, key: MessageKey): string {
+  if (language === "fr") {
+    const french: Record<MessageKey, string> = {
+      workbench: "ATELIER",
+      localBoundary: "Frontière de données locale active",
+      noRemote: "Aucun fournisseur distant connecté",
+      language: "Langue",
+      workspaces: "Espaces de travail",
+      workspacesCaption: "Projets et sessions",
+      models: "Modèles",
+      modelsCaption: "Preuves d'exécution",
+      agent: "Agent",
+      agentCaption: "Plans et activité",
+      kernel: "Kernel",
+      kernelCaption: "Python persistant",
+      science: "Science",
+      scienceCaption: "Dossiers de recherche",
+      artifacts: "Artefacts",
+      artifactsCaption: "Sorties versionnées",
+      compute: "Calcul",
+      computeCaption: "Tâches durables",
+      settings: "Réglages",
+      settingsCaption: "Frontières de données",
+    };
+    return french[key];
+  }
   return messages[language][key];
 }
 
