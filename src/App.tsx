@@ -481,6 +481,12 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
     }
   }
 
+  async function manageTodo(todoId: string, operation: string) {
+    if (!projectId) return;
+    await invoke("local_agent_activity_development", { projectId, todoId, operation });
+    await refreshActivity(projectId);
+  }
+
   return (
     <section className="chat-workspace">
       <div className="chat-transcript" aria-live="polite">
@@ -523,6 +529,8 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
           </section>
         )}
       </div>
+
+      {activity && activity.todos.length > 0 && <section className="activity-ledger"><div className="activity-heading"><ListTodo size={16} /><h3>{language === "fr" ? "Gérer les todos" : "Manage todos"}</h3></div>{activity.todos.map(todo => <div className="workspace-row" key={todo.id}><span>{todo.state}: {todo.text}</span><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, todo.state === "paused" ? "pending" : "paused")}>{todo.state === "paused" ? (language === "fr" ? "Reprendre" : "Resume") : (language === "fr" ? "Pause" : "Pause")}</button><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, "completed")}>{language === "fr" ? "Terminer" : "Complete"}</button><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, "delete")}>{language === "fr" ? "Supprimer" : "Delete"}</button></div>)}</section>}
 
       <form className="chat-composer" onSubmit={event => void submit(event)}>
         {palette === "commands" && (
