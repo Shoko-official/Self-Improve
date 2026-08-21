@@ -53,6 +53,16 @@ class FrontierStoreTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.store.restore_project(project_id)
 
+    def test_archived_session_is_hidden_until_restored(self) -> None:
+        project_id = self.store.create_project("Session lifecycle")
+        session_id = self.store.create_session(project_id, "Archive me")
+        self.store.archive_session(session_id)
+        self.assertEqual(self.store.search_sessions("Archive", project_id), [])
+        with self.assertRaises(KeyError):
+            self.store.set_session_starred(session_id, True)
+        self.store.restore_session(session_id)
+        self.assertEqual(self.store.search_sessions("Archive", project_id)[0]["id"], session_id)
+
     def test_projects_and_sessions_support_configuration_and_literal_search(self) -> None:
         project_id = self.store.create_project("Cell atlas", "Initial scope")
         session_id = self.store.create_session(project_id, "Review batch effects", "extended")

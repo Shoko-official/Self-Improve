@@ -184,7 +184,7 @@ def set_project_instructions(root: Path, project_id: str, instructions: str) -> 
 def sessions(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
     try:
-        records = [dict(row) for row in store.connection.execute("SELECT id, project_id, title, parent_session_id, reasoning_effort, starred, created_at FROM sessions WHERE project_id = ? ORDER BY created_at, id", (project_id,))]
+        records = [dict(row) for row in store.connection.execute("SELECT id, project_id, title, parent_session_id, reasoning_effort, starred, archived_at, created_at FROM sessions WHERE project_id = ? ORDER BY created_at, id", (project_id,))]
     finally:
         store.close()
     return {"project_id": project_id, "sessions": records}
@@ -216,6 +216,20 @@ def set_session_reasoning_effort(root: Path, session_id: str, reasoning_effort: 
     try: store.set_session_reasoning_effort(session_id, reasoning_effort)
     finally: store.close()
     return {"id": session_id, "reasoning_effort": reasoning_effort}
+
+
+def archive_session(root: Path, session_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: store.archive_session(session_id)
+    finally: store.close()
+    return {"id": session_id, "archived": True}
+
+
+def restore_session(root: Path, session_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try: store.restore_session(session_id)
+    finally: store.close()
+    return {"id": session_id, "archived": False}
 
 
 def search_sessions(root: Path, query: str, project_id: str | None = None) -> dict[str, object]:
@@ -956,7 +970,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1170,6 +1184,14 @@ def main() -> None:
         if args.session_id is None:
             parser.error("set-session-reasoning requires --session-id")
         result = set_session_reasoning_effort(root, args.session_id, args.reasoning_effort)
+    elif args.command == "archive-session":
+        if args.session_id is None:
+            parser.error("archive-session requires --session-id")
+        result = archive_session(root, args.session_id)
+    elif args.command == "restore-session":
+        if args.session_id is None:
+            parser.error("restore-session requires --session-id")
+        result = restore_session(root, args.session_id)
     elif args.command == "search-sessions":
         if args.query is None:
             parser.error("search-sessions requires --query")

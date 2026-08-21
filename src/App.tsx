@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import { ModelsSurface } from "./ModelsSurface";
 import { AutomationsSurface } from "./AutomationsSurface";
 import {
+  Archive,
   Bot,
   Bell,
   Boxes,
@@ -48,7 +49,7 @@ type EngineDoctorReport = { checked_at: string; host: { logical_cores: number; m
 type DesktopNotification = { id: string; source: string; severity: "info" | "warning" | "error"; title: string; body: string; deep_link: string; acknowledged_at: string | null; };
 type ClaimRecord = { id: string; claim_type: string; status: "draft" | "supported" | "disputed" | "retracted"; text: string; uncertainty: string; evidence: Array<{ evidence_uri: string; selector: string }>; };
 type ProjectRecord = { id: string; name: string; instructions: string; archived_at: string | null; created_at: string; };
-type SessionRecord = { id: string; title: string; parent_session_id: string | null; reasoning_effort: string; starred: number; created_at: string; };
+type SessionRecord = { id: string; title: string; parent_session_id: string | null; reasoning_effort: string; starred: number; archived_at: string | null; created_at: string; };
 type JobRecord = { id: string; project_id: string; operation: string; state: string; created_at: string; };
 type GenerationRecord = { id: string; project_id: string; runtime: string; model: string; state: string; output: string; diagnostic: { code: string } | null; };
 type ArtifactRecord = { id: string; name: string; media_type: string; created_at: string; };
@@ -907,6 +908,8 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
   const [reasoningEffort, setReasoningEffort] = useState("standard");
   const [message, setMessage] = useState<string | null>(null);
   const activeProject = activeProjects.find(project => project.id === selected) ?? null;
+  const activeSessions = sessions?.filter(session => session.archived_at === null) ?? [];
+  const archivedSessions = sessions?.filter(session => session.archived_at !== null) ?? [];
 
   async function loadProject(projectId: string) {
     const project = activeProjects.find(item => item.id === projectId);
@@ -998,6 +1001,15 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
     if (activeProject) await loadProject(activeProject.id);
   }
 
+  async function setSessionArchived(sessionId: string, archived: boolean) {
+    try {
+      await invoke(archived ? "archive_workspace_session_development" : "restore_workspace_session_development", { sessionId });
+      if (activeProject) await loadProject(activeProject.id);
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Session update failed.");
+    }
+  }
+
   async function archive() {
     if (!activeProject) return;
     await invoke("archive_workspace_project_development", { projectId: activeProject.id });
@@ -1073,7 +1085,8 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
               <button className="minor-action" type="submit"><Plus size={14} />{language === "fr" ? "Ajouter" : "Add"}</button>
             </form>
             <div className="project-session-list">
-              {sessions?.map(session => <div key={session.id}><MessageSquare size={14} /><span><strong>{session.title}</strong><small>{session.reasoning_effort}</small></span><button className="icon-button" type="button" onClick={() => void toggleStar(session)} aria-label={session.starred ? "Unstar" : "Star"}><Star size={14} fill={session.starred ? "currentColor" : "none"} /></button></div>)}
+              {activeSessions.map(session => <div key={session.id}><MessageSquare size={14} /><span><strong>{session.title}</strong><small>{session.reasoning_effort}</small></span><button className="icon-button" type="button" onClick={() => void toggleStar(session)} aria-label={session.starred ? "Unstar" : "Star"}><Star size={14} fill={session.starred ? "currentColor" : "none"} /></button><button className="icon-button" type="button" onClick={() => void setSessionArchived(session.id, true)} aria-label={language === "fr" ? "Archiver" : "Archive"}><Archive size={14} /></button></div>)}
+              {archivedSessions.length > 0 && <div className="archived-session-list"><small>{language === "fr" ? "Archivées" : "Archived"}</small>{archivedSessions.map(session => <div key={session.id}><span>{session.title}</span><button className="minor-action" type="button" onClick={() => void setSessionArchived(session.id, false)}>{language === "fr" ? "Restaurer" : "Restore"}</button></div>)}</div>}
               {sessions?.length === 0 && <p>{language === "fr" ? "Aucune discussion enregistrée." : "No saved chats."}</p>}
             </div>
           </section>
