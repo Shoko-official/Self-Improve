@@ -228,6 +228,21 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .markdown-body th { background: var(--subtle-bg); font-weight: 650; }
 .markdown-body img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 9px; }
 .markdown-body hr { height: 1px; margin: 1.5em 0; background: var(--border); border: 0; }
+.artifact-surface { align-content: start; }
+.artifact-preview { margin-top: 18px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.artifact-preview > header, .artifact-preview > footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; background: var(--subtle-bg); color: var(--text-faint); font-size: 11px; }
+.artifact-preview > header { border-bottom: 1px solid var(--border); }
+.artifact-preview > header div { display: flex; align-items: baseline; gap: 8px; }
+.artifact-preview > header span { font-size: 9px; letter-spacing: .08em; }
+.artifact-preview > header strong { color: var(--text); font-size: 12px; font-weight: 650; }
+.artifact-preview > header code, .artifact-preview > footer { font: 10px ui-monospace, "Cascadia Code", monospace; }
+.artifact-preview > footer { justify-content: flex-start; flex-wrap: wrap; border-top: 1px solid var(--border); }
+.artifact-rendered-html { max-height: 440px; padding: 18px; overflow: auto; }
+.artifact-rendered-html .cell-meta { margin-bottom: 6px; color: var(--text-faint); font: 10px ui-monospace, "Cascadia Code", monospace; }
+.artifact-rendered-html section + section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.artifact-figure-preview { height: 460px; min-height: 260px; }
+.artifact-preview-warning { margin: 0; padding: 9px 13px; color: var(--warning); border-top: 1px solid var(--border); font-size: 12px; }
+@media (max-width: 720px) { .artifact-preview > header { align-items: flex-start; flex-direction: column; } .artifact-figure-preview { height: 330px; } }
 
 .registry-page, .surface { width: min(900px, calc(100% - 56px)); margin: 0 auto; padding: 34px 0 48px; }
 .plugin-hub { min-height: 100%; background: var(--panel-bg); }
