@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatNanoseconds, latestProgress, parseOptionalInteger } from "./ModelsSurface";
+import { formatBytes, formatNanoseconds, latestProgress, parseOptionalInteger, registeredExternalModelPaths } from "./ModelsSurface";
 
 describe("model transfer presentation", () => {
   it("formats binary sizes without inventing precision", () => {
@@ -24,5 +24,12 @@ describe("model transfer presentation", () => {
     expect(parseOptionalInteger("")).toBeNull();
     expect(parseOptionalInteger(" 4096 ")).toBe(4096);
     expect(formatNanoseconds(1_250_000_000)).toBe("1.25 s");
+  });
+
+  it("restores only external GGUF references from the local registry", () => {
+    expect([...registeredExternalModelPaths([
+      { path: "C:\\models\\shared.gguf", capability_state: "external-reference" },
+      { path: "C:\\models\\downloaded.gguf", capability_state: "unvalidated" },
+    ])]).toEqual(["C:\\models\\shared.gguf"]);
   });
 });

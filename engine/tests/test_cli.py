@@ -153,12 +153,17 @@ class CliTests(unittest.TestCase):
             model.parent.mkdir()
             model.write_bytes(b"gguf")
             library = {"available": True, "models_root": str(model.parent), "models": [{"path": str(model)}]}
-            with patch("frontier_engine.cli.probe_lm_studio_library", return_value=library), patch("frontier_engine.cli.probe_ollama", return_value={"available": False, "models": []}):
+            catalog_root = root / "catalog"
+            with patch("frontier_engine.cli.probe_lm_studio_library", return_value=library), patch("frontier_engine.cli.probe_ollama", return_value={"available": False, "models": []}), patch("frontier_engine.cli.data_root", return_value=catalog_root):
                 self.assertEqual(local_model_catalog()["lm_studio_library"], library)
+                self.assertTrue((catalog_root / "models.sqlite3").is_file())
                 result = reference_lm_studio_model(root, model)
+                catalog = local_model_catalog(root)
             self.assertFalse(result["copied"])
             self.assertEqual(result["source"], "lmstudio-library")
             self.assertEqual(result["model"]["path"], str(model.resolve()))
+            self.assertEqual(catalog["registered_models"][0]["path"], str(model.resolve()))
+            self.assertEqual(catalog["registered_models"][0]["capability_state"], "external-reference")
             self.assertEqual(list(root.rglob("*.gguf")), [model])
 
     def test_huggingface_commands_keep_network_transfer_explicit(self) -> None:
