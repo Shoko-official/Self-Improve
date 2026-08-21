@@ -22,6 +22,15 @@ class CliTests(unittest.TestCase):
             self.assertEqual(result["citations"][0]["start_offset"], 0)
             self.assertEqual(rag_evaluate(root, '[{"query":"nickel","expected_sources":["file:///notes/hydrogen.md"]}]')["recall_at_k"], 1.0)
 
+    def test_rag_commands_use_the_selected_ollama_embedding_model(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, patch("frontier_engine.cli.OllamaEmbedder") as embedder_type:
+            embedder_type.return_value.embed.return_value = [0.25, 0.75]
+            root = Path(directory)
+            result = rag_ingest(root, "file:///notes/vector.md", "Vector", "Vectors remain local.", "nomic-embed-text")
+            self.assertEqual(result["retrieval_mode"], "hybrid")
+            self.assertEqual(rag_search(root, "vectors", embedding_model="nomic-embed-text")["retrieval_mode"], "hybrid")
+            self.assertEqual(embedder_type.call_args_list[0].args, ("nomic-embed-text",))
+
     def test_provider_health_uses_only_a_named_environment_credential(self) -> None:
         with patch("frontier_engine.cli.OpenAICompatibleProvider") as provider_type, patch.dict(os.environ, {"FRONTIER_PROVIDER_KEY": "secret"}, clear=False):
             provider_type.return_value.health.return_value = {"provider": "OpenAI-compatible", "healthy": True, "models": ["model-a"]}

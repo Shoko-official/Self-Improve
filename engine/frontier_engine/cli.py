@@ -33,6 +33,7 @@ from frontier_engine.inference import plan_ollama_inference
 from frontier_engine.integration_registry import IntegrationLedger, call_mcp_tool, discover_extensions, discover_skills, probe_mcp_servers
 from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
 from frontier_engine.runtimes import probe_lm_studio_library, probe_ollama, stream_ollama, warmup_ollama
+from frontier_engine.runtimes import OllamaEmbedder
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer, execute_s3_signed_transfer
@@ -528,8 +529,12 @@ def image_runtime_history(base_url: str, prompt_id: str) -> dict[str, object]:
     return ComfyUIAdapter(base_url).history(prompt_id)
 
 
-def rag_ingest(root: Path, source_uri: str, source_label: str, content: str) -> dict[str, object]:
-    index = HybridIndex(root / "rag.sqlite3")
+def _rag_index(root: Path, embedding_model: str | None = None) -> HybridIndex:
+    return HybridIndex(root / "rag.sqlite3", OllamaEmbedder(embedding_model) if embedding_model else None)
+
+
+def rag_ingest(root: Path, source_uri: str, source_label: str, content: str, embedding_model: str | None = None) -> dict[str, object]:
+    index = _rag_index(root, embedding_model)
     try:
         chunks = index.ingest(source_uri, source_label, content)
         return {"source_uri": source_uri, "chunks": len(chunks), "retrieval_mode": index.retrieval_mode}
@@ -537,19 +542,19 @@ def rag_ingest(root: Path, source_uri: str, source_label: str, content: str) -> 
         index.close()
 
 
-def rag_search(root: Path, query: str, limit: int = 5) -> dict[str, object]:
-    index = HybridIndex(root / "rag.sqlite3")
+def rag_search(root: Path, query: str, limit: int = 5, embedding_model: str | None = None) -> dict[str, object]:
+    index = _rag_index(root, embedding_model)
     try:
         return {"retrieval_mode": index.retrieval_mode, "citations": [citation.__dict__ for citation in index.search(query, limit)]}
     finally:
         index.close()
 
 
-def rag_evaluate(root: Path, cases_json: str, limit: int = 5) -> dict[str, object]:
+def rag_evaluate(root: Path, cases_json: str, limit: int = 5, embedding_model: str | None = None) -> dict[str, object]:
     cases = json.loads(cases_json)
     if not isinstance(cases, list) or not all(isinstance(case, dict) and isinstance(case.get("query"), str) and isinstance(case.get("expected_sources"), list) for case in cases):
         raise ValueError("FR-RAG-EVALUATION-CASES")
-    index = HybridIndex(root / "rag.sqlite3")
+    index = _rag_index(root, embedding_model)
     try:
         return index.evaluate(((case["query"], set(case["expected_sources"])) for case in cases), limit)
     finally:
@@ -1163,6 +1168,7 @@ def main() -> None:
     parser.add_argument("--source-uri")
     parser.add_argument("--source-label")
     parser.add_argument("--cases-json")
+    parser.add_argument("--embedding-model")
     parser.add_argument("--profile-model", action="append")
     parser.add_argument("--context-length", type=int)
     parser.add_argument("--cpu-threads", type=int)
@@ -1470,15 +1476,15 @@ def main() -> None:
     elif args.command == "rag-ingest":
         if args.source_uri is None or args.source_label is None:
             parser.error("rag-ingest requires --source-uri and --source-label")
-        result = rag_ingest(root, args.source_uri, args.source_label, args.content)
+        result = rag_ingest(root, args.source_uri, args.source_label, args.content, args.embedding_model)
     elif args.command == "rag-search":
         if args.query is None:
             parser.error("rag-search requires --query")
-        result = rag_search(root, args.query, args.limit)
+        result = rag_search(root, args.query, args.limit, args.embedding_model)
     elif args.command == "rag-evaluate":
         if args.cases_json is None:
             parser.error("rag-evaluate requires --cases-json")
-        result = rag_evaluate(root, args.cases_json, args.limit)
+        result = rag_evaluate(root, args.cases_json, args.limit, args.embedding_model)
     elif args.command == "reference-lmstudio-model":
         if args.path is None:
             parser.error("reference-lmstudio-model requires --path")

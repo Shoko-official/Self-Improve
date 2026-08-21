@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 
 from frontier_engine.inference import plan_ollama_inference
-from frontier_engine.runtimes import probe_ollama, stream_ollama, warmup_ollama
+from frontier_engine.runtimes import OllamaEmbedder, probe_ollama, stream_ollama, warmup_ollama
 
 
 class OllamaHandler(BaseHTTPRequestHandler):
@@ -24,6 +24,8 @@ class OllamaHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length", "0"))
         request = json.loads(self.rfile.read(length))
+        if self.path == "/api/embed":
+            self._json({"embeddings": [[0.25, 0.75]]}); return
         if self.path != "/api/generate":
             self.send_response(404); self.end_headers(); return
         if request.get("stream") is False:
@@ -68,6 +70,9 @@ class InferenceTests(unittest.TestCase):
         self.assertEqual(stream.metrics["tokens_per_second"], 10.0)
         warmup = warmup_ollama("qwen3", {"num_ctx": 4096}, "10m", probe)
         self.assertEqual(warmup["loaded"]["context_length"], 4096)
+
+    def test_embeddings_use_the_verified_local_ollama_api(self) -> None:
+        self.assertEqual(OllamaEmbedder("qwen3", probe_ollama()).embed("local retrieval"), [0.25, 0.75])
 
     def test_profile_selects_bounded_defaults_and_memory_evidence(self) -> None:
         probe = probe_ollama()

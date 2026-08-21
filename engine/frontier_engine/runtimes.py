@@ -145,6 +145,23 @@ def warmup_ollama(model: str, options: Mapping[str, object], keep_alive: str, ru
     return {"model": model, "keep_alive": keep_alive, "options": dict(options), "metrics": _ollama_metrics(result), "loaded": exact}
 
 
+class OllamaEmbedder:
+    """Explicit local Ollama embedding adapter for hybrid retrieval."""
+
+    def __init__(self, model: str, runtime_probe: dict[str, Any] | None = None) -> None:
+        probe = runtime_probe or probe_ollama()
+        if not probe["available"] or model not in probe["models"]:
+            raise LocalRuntimeUnavailable(str(probe.get("reason") or "FR-RUNTIME-OLLAMA-MODEL-NOT-INSTALLED"))
+        self.model = model
+
+    def embed(self, text: str) -> list[float]:
+        result = _ollama_json("/api/embed", {"model": self.model, "input": text}, timeout=60)
+        embeddings = result.get("embeddings")
+        if not isinstance(embeddings, list) or len(embeddings) != 1 or not isinstance(embeddings[0], list) or not embeddings[0] or not all(isinstance(value, (int, float)) for value in embeddings[0]):
+            raise RuntimeError("FR-RUNTIME-OLLAMA-EMBEDDING-INVALID")
+        return [float(value) for value in embeddings[0]]
+
+
 def stream_ollama_pull(model: str) -> Iterator[str]:
     """Yield local Ollama pull output without selecting a fallback model."""
     model = model.strip()

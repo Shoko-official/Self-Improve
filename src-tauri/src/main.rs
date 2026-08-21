@@ -896,8 +896,9 @@ fn rag_ingest_development(
     source_uri: String,
     source_label: String,
     content: String,
+    embedding_model: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    run_development_engine(&[
+    let mut arguments = vec![
         "rag-ingest".to_owned(),
         "--source-uri".to_owned(),
         source_uri,
@@ -905,14 +906,25 @@ fn rag_ingest_development(
         source_label,
         "--content".to_owned(),
         content,
-    ])
+    ];
+    if let Some(model) = embedding_model.filter(|value| !value.trim().is_empty()) {
+        arguments.extend(["--embedding-model".to_owned(), model]);
+    }
+    run_development_engine(&arguments)
 }
 
 #[tauri::command]
-fn rag_search_development(query: String, limit: Option<u32>) -> Result<serde_json::Value, String> {
+fn rag_search_development(
+    query: String,
+    limit: Option<u32>,
+    embedding_model: Option<String>,
+) -> Result<serde_json::Value, String> {
     let mut arguments = vec!["rag-search".to_owned(), "--query".to_owned(), query];
     if let Some(value) = limit {
         arguments.extend(["--limit".to_owned(), value.to_string()]);
+    }
+    if let Some(model) = embedding_model.filter(|value| !value.trim().is_empty()) {
+        arguments.extend(["--embedding-model".to_owned(), model]);
     }
     run_development_engine(&arguments)
 }
@@ -921,6 +933,7 @@ fn rag_search_development(query: String, limit: Option<u32>) -> Result<serde_jso
 fn rag_evaluate_development(
     cases_json: String,
     limit: Option<u32>,
+    embedding_model: Option<String>,
 ) -> Result<serde_json::Value, String> {
     let mut arguments = vec![
         "rag-evaluate".to_owned(),
@@ -929,6 +942,9 @@ fn rag_evaluate_development(
     ];
     if let Some(value) = limit {
         arguments.extend(["--limit".to_owned(), value.to_string()]);
+    }
+    if let Some(model) = embedding_model.filter(|value| !value.trim().is_empty()) {
+        arguments.extend(["--embedding-model".to_owned(), model]);
     }
     run_development_engine(&arguments)
 }
