@@ -58,6 +58,7 @@ type LocalModelCatalog = { shoko_gguf: { available: boolean; version: string; pa
 type KernelResult = { project_id: string; execution: { state: string; stdout: string; stderr: string; error?: string }; job: { id: string; state: string; diagnostic: { code: string } | null; events: Array<{ kind: string; created_at: string }> } };
 type FolderGrant = { id: string; path: string; operation: string; revoked_at: string | null };
 type GitContext = { linked: boolean; repository?: boolean; path?: string; branch?: string; changes?: number; status?: string[]; remote?: string | null; reason?: string; ci?: { available: boolean; latest?: { status: string; conclusion: string; name: string; url: string; updatedAt: string } | null; reason?: string } };
+type GitDiff = { linked: boolean; repository?: boolean; path?: string; files?: string[]; preview?: string; truncated?: boolean; scope?: string; reason?: string };
 type Surface = "chat" | "workspaces" | "models" | "science" | "artifacts" | "automations" | "plugins" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
 type Theme = "light" | "dark";
 type NavigationItem = { id: Surface; icon: LucideIcon; en: string; fr: string };
@@ -901,6 +902,7 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
   const [sessions, setSessions] = useState<SessionRecord[] | null>(null);
   const [grants, setGrants] = useState<FolderGrant[]>([]);
   const [git, setGit] = useState<GitContext | null>(null);
+  const [gitDiff, setGitDiff] = useState<GitDiff | null>(null);
   const [sessionTitle, setSessionTitle] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState("standard");
   const [message, setMessage] = useState<string | null>(null);
@@ -921,6 +923,7 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
       setSessions(sessionResult.sessions);
       setGrants(folderResult.grants.filter(grant => grant.revoked_at === null));
       setGit(gitResult);
+      setGitDiff(null);
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : "Project details are unavailable.");
     }
@@ -932,6 +935,7 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
       setSessions(null);
       setGrants([]);
       setGit(null);
+      setGitDiff(null);
       return;
     }
     if (!activeProjects.some(project => project.id === selected)) void loadProject(activeProjects[0].id);
@@ -1001,6 +1005,15 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
     await refresh();
   }
 
+  async function loadGitDiff() {
+    if (!activeProject) return;
+    try {
+      setGitDiff(await invoke<GitDiff>("project_git_diff_development", { projectId: activeProject.id }));
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Git diff is unavailable.");
+    }
+  }
+
   async function restore(projectId: string) {
     try {
       await invoke("restore_workspace_project_development", { projectId });
@@ -1047,7 +1060,10 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
             <span><GitBranch size={14} />{git.branch}</span>
             <span>{git.changes ?? 0} {language === "fr" ? "fichiers modifiés" : "changed files"}</span>
             {git.ci?.available && git.ci.latest && <a href={git.ci.latest.url} target="_blank" rel="noreferrer">CI: {git.ci.latest.conclusion || git.ci.latest.status}</a>}
+            <button className="minor-action" type="button" onClick={() => void loadGitDiff()}>{language === "fr" ? "Voir les diffs" : "View diffs"}</button>
           </div>}
+
+          {gitDiff?.repository && <details className="project-diff" open><summary>{language === "fr" ? "Diff Git local" : "Local Git diff"}</summary><p>{gitDiff.scope}{gitDiff.truncated ? (language === "fr" ? ", aperçu tronqué." : ", preview truncated.") : "."}</p>{gitDiff.files?.length ? <ul>{gitDiff.files.map(file => <li key={file}>{file}</li>)}</ul> : <p>{language === "fr" ? "Aucune modification Git détectée." : "No Git changes detected."}</p>}{gitDiff.preview && <pre>{gitDiff.preview}</pre>}</details>}
 
           <section className="project-section">
             <div className="project-section-heading"><div><h4>{language === "fr" ? "Discussions" : "Chats"}</h4><p>{language === "fr" ? "Sessions enregistrées dans ce projet." : "Sessions saved in this project."}</p></div></div>
