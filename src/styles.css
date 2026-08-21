@@ -78,6 +78,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .new-chat-button:hover { background: var(--hover-bg); }
 kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 5px; font: 10px ui-monospace, "Cascadia Code", monospace; }
 .sidebar-nav { display: grid; gap: 2px; margin-top: 12px; }
+.notification-menu { position: relative; }
+.notification-trigger { position: relative; }
+.notification-count { position: absolute; top: -5px; right: -5px; min-width: 15px; height: 15px; padding: 0 3px; color: var(--panel-bg); background: var(--accent); border-radius: 8px; font-size: 9px; line-height: 15px; text-align: center; }
+.notification-panel { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; width: min(340px, calc(100vw - 28px)); max-height: min(480px, calc(100vh - 90px)); padding: 10px; overflow: auto; background: var(--raised-bg); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 16px 36px rgba(0, 0, 0, .18); }
+.notification-panel-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 12px; }
+.notification-row { display: grid; gap: 5px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 12px; }
+.notification-row p { margin: 0; color: var(--text-soft); line-height: 1.4; }
+.notification-row code { overflow: hidden; color: var(--text-faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.notification-row .minor-action { justify-self: start; }
+.notification-warning strong { color: var(--warning); }
+.notification-error strong { color: var(--danger); }
+.notification-empty { margin: 10px 0 2px; color: var(--text-faint); font-size: 12px; }
 .sidebar-secondary-nav { display: grid; gap: 2px; margin: 2px 0 2px 10px; padding-left: 8px; border-left: 1px solid var(--border); }
 .secondary-navigation-toggle { margin-top: 4px; }
 .rotate-90 { transform: rotate(90deg); }

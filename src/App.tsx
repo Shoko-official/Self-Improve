@@ -6,6 +6,7 @@ import { ModelsSurface } from "./ModelsSurface";
 import { AutomationsSurface } from "./AutomationsSurface";
 import {
   Bot,
+  Bell,
   Boxes,
   Cable,
   CalendarClock,
@@ -44,6 +45,7 @@ import { surfaceText, type Language } from "./i18n";
 
 type CapabilityReport = { operatingSystem: string; architecture: string; logicalCores: number; capturedAt: number; };
 type EngineDoctorReport = { checked_at: string; host: { logical_cores: number; machine: string; release: string; system: string; }; limits: string[]; protocol_version: number; status: string; };
+type DesktopNotification = { id: string; source: string; severity: "info" | "warning" | "error"; title: string; body: string; deep_link: string; acknowledged_at: string | null; };
 type ClaimRecord = { id: string; claim_type: string; status: "draft" | "supported" | "disputed" | "retracted"; text: string; uncertainty: string; evidence: Array<{ evidence_uri: string; selector: string }>; };
 type ProjectRecord = { id: string; name: string; instructions: string; archived_at: string | null; created_at: string; };
 type SessionRecord = { id: string; title: string; parent_session_id: string | null; reasoning_effort: string; starred: number; created_at: string; };
@@ -85,6 +87,8 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(() => localStorage.getItem("frontier-theme") === "light" ? "light" : "dark");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [moreNavigationOpen, setMoreNavigationOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<DesktopNotification[]>([]);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [chatKey, setChatKey] = useState(0);
   const [report, setReport] = useState<CapabilityReport | null>(null);
@@ -134,6 +138,16 @@ export function App() {
     }
   }
 
+  async function refreshNotifications() {
+    try { setNotifications((await invoke<{ notifications: DesktopNotification[] }>("desktop_notifications_development")).notifications); }
+    catch { setNotifications([]); }
+  }
+
+  async function acknowledgeNotification(notificationId: string) {
+    try { setNotifications((await invoke<{ notifications: DesktopNotification[] }>("acknowledge_desktop_notification_development", { notificationId })).notifications); }
+    catch { await refreshNotifications(); }
+  }
+
   async function createWorkspace(name: string) {
     await invoke("create_workspace_project_development", { name });
     await refreshWorkspaces();
@@ -148,6 +162,7 @@ export function App() {
     void probe();
     void probeEngine();
     void refreshWorkspaces();
+    void refreshNotifications();
   }, []);
 
   useEffect(() => {
@@ -244,6 +259,13 @@ export function App() {
             </div>
           </div>
           <div className="header-actions">
+            <div className="notification-menu">
+              <button className="icon-button notification-trigger" type="button" onClick={() => { setNotificationsOpen(value => !value); if (!notificationsOpen) void refreshNotifications(); }} aria-label={language === "fr" ? "Notifications" : "Notifications"} aria-expanded={notificationsOpen}>
+                <Bell size={17} />
+                {notifications.length > 0 && <span className="notification-count">{notifications.length}</span>}
+              </button>
+              {notificationsOpen && <section className="notification-panel" aria-label={language === "fr" ? "Notifications en attente" : "Pending notifications"}><div className="notification-panel-heading"><strong>{language === "fr" ? "Notifications" : "Notifications"}</strong><button className="minor-action" type="button" onClick={() => void refreshNotifications()}>{language === "fr" ? "Actualiser" : "Refresh"}</button></div>{notifications.length ? notifications.map(notification => <article className={`notification-row notification-${notification.severity}`} key={notification.id}><strong>{notification.title}</strong><p>{notification.body}</p><code>{notification.deep_link}</code><button className="minor-action" type="button" onClick={() => void acknowledgeNotification(notification.id)}>{language === "fr" ? "Acquitter" : "Acknowledge"}</button></article>) : <p className="notification-empty">{language === "fr" ? "Aucune notification en attente." : "No pending notifications."}</p>}</section>}
+            </div>
             <label className="language-control">
               <span>{language === "fr" ? "Langue" : "Language"}</span>
               <select value={language} onChange={event => setLanguage(event.target.value as Language)}>
