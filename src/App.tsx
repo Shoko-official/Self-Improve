@@ -27,6 +27,7 @@ import {
   Library,
   ListTodo,
   MessageSquare,
+  Mic,
   Moon,
   PanelLeftOpen,
   PanelRightOpen,
@@ -65,7 +66,7 @@ type FolderGrant = { id: string; path: string; operation: string; revoked_at: st
 type GitContext = { linked: boolean; repository?: boolean; path?: string; branch?: string; changes?: number; status?: string[]; remote?: string | null; reason?: string; ci?: { available: boolean; latest?: { status: string; conclusion: string; name: string; url: string; updatedAt: string } | null; reason?: string } };
 type GitDiff = { linked: boolean; repository?: boolean; path?: string; files?: string[]; preview?: string; truncated?: boolean; scope?: string; reason?: string };
 type ProviderProfile = { kind: "openai-compatible" | "nvidia-nim"; baseUrl: string; credentialHandle: string; models: string[] };
-type Surface = "chat" | "workspaces" | "models" | "science" | "images" | "artifacts" | "automations" | "plugins" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
+type Surface = "chat" | "workspaces" | "models" | "science" | "images" | "audio" | "artifacts" | "automations" | "plugins" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
 type Theme = "light" | "dark";
 type NavigationItem = { id: Surface; icon: LucideIcon; en: string; fr: string };
 const providerProfileKey = "frontier-provider-profile";
@@ -76,6 +77,7 @@ const navigation: NavigationItem[] = [
   { id: "models", icon: Boxes, en: "Models", fr: "Modèles" },
   { id: "science", icon: FlaskConical, en: "Science", fr: "Science" },
   { id: "images", icon: Image, en: "Images", fr: "Images" },
+  { id: "audio", icon: Mic, en: "Audio", fr: "Audio" },
   { id: "artifacts", icon: FileStack, en: "Artifacts", fr: "Artefacts" },
   { id: "automations", icon: CalendarClock, en: "Scheduled", fr: "Planifié" },
   { id: "plugins", icon: Puzzle, en: "Plugins", fr: "Plugins" },
@@ -88,7 +90,7 @@ const navigation: NavigationItem[] = [
 ];
 
 export const primaryNavigation = navigation.filter(item => ["chat", "workspaces", "models", "science"].includes(item.id));
-export const secondaryNavigation = navigation.filter(item => ["images", "artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "kernel"].includes(item.id));
+export const secondaryNavigation = navigation.filter(item => ["images", "audio", "artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "kernel"].includes(item.id));
 
 export function resolveProjectId(projects: ProjectRecord[], preferredProjectId: string, currentProjectId: string): string {
   if (projects.some(project => project.id === preferredProjectId)) return preferredProjectId;
@@ -309,6 +311,7 @@ export function App() {
             {surface === "models" && <ModelsSurface report={report} error={error} probe={probe} engineReport={engineReport} engineError={engineError} probeEngine={probeEngine} projects={projectRecords} language={language} />}
             {surface === "science" && <ScienceWorkbench projects={projectRecords} language={language} />}
             {surface === "images" && <ImageSurface language={language} />}
+            {surface === "audio" && <AudioSurface language={language} />}
             {surface === "artifacts" && <ArtifactWorkspaceSurface language={language} />}
             {surface === "automations" && <AutomationsSurface projects={projectRecords} language={language} />}
             {surface === "plugins" && <PluginHubSurface language={language} projects={projectRecords} />}
@@ -694,6 +697,23 @@ function ImageSurface({ language }: { language: Language }) {
   async function submit(event: FormEvent) { event.preventDefault(); try { setBusy(true); setError(null); setJob(await invoke("image_runtime_submit_development", { endpoint, workflowJson: workflow, approved })); } catch (reason) { setError(reason instanceof Error ? reason.message : "FR-IMAGE-COMFYUI-SUBMIT"); } finally { setBusy(false); } }
   async function refreshJob() { if (!job) return; try { setBusy(true); setError(null); setJob(await invoke("image_runtime_history_development", { endpoint, promptId: job.prompt_id })); } catch (reason) { setError(reason instanceof Error ? reason.message : "FR-IMAGE-COMFYUI-HISTORY"); } finally { setBusy(false); } }
   return <section className="surface"><div className="surface-mark">LOCAL IMAGE RUNTIME</div><h2>{language === "fr" ? "Images avec ComfyUI local" : "Images with local ComfyUI"}</h2><p>{language === "fr" ? "Shoko utilise uniquement une instance ComfyUI locale. Aucun prompt ni image n'est envoyée à un fournisseur distant." : "Shoko uses only a local ComfyUI instance. No prompt or image is sent to a remote provider."}</p><form className="project-form" onSubmit={event => void submit(event)}><label>ComfyUI endpoint<input type="url" value={endpoint} onChange={event => setEndpoint(event.target.value)} required /></label><button className="minor-action" type="button" onClick={() => void check()} disabled={busy}>{language === "fr" ? "Vérifier ComfyUI" : "Check ComfyUI"}</button><label>{language === "fr" ? "Workflow ComfyUI JSON" : "ComfyUI workflow JSON"}<textarea value={workflow} onChange={event => setWorkflow(event.target.value)} placeholder='{"node-id":{"class_type":"...","inputs":{}}}' spellCheck={false} required /></label><label className="approval-check"><input type="checkbox" checked={approved} onChange={event => setApproved(event.target.checked)} />{language === "fr" ? "J'autorise cette exécution locale." : "I approve this local execution."}</label><button className="action" type="submit" disabled={busy || !approved}>{language === "fr" ? "Soumettre le workflow" : "Submit workflow"}</button></form>{error && <p className="agent-error">{error}</p>}{health && <Evidence rows={[`${health.nodes.length} ${language === "fr" ? "nœuds détectés" : "nodes detected"}`, health.endpoint]} />}{job && <section className="activity-ledger"><div className="activity-heading"><Image size={16} /><h3>{job.state}: {job.prompt_id}</h3></div><button type="button" className="minor-action" onClick={() => void refreshJob()} disabled={busy}>{language === "fr" ? "Actualiser le job" : "Refresh job"}</button>{job.outputs && <Evidence rows={job.outputs.map(output => output.filename)} />}</section>}</section>;
+}
+
+function AudioSurface({ language }: { language: Language }) {
+  const [runtime, setRuntime] = useState("whisper-cli");
+  const [modelPath, setModelPath] = useState("");
+  const [audioPath, setAudioPath] = useState("");
+  const [timeoutSeconds, setTimeoutSeconds] = useState(600);
+  const [result, setResult] = useState<{ transcript: string; output_bytes: number; runtime: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function transcribe(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(null); setResult(null);
+    try { setResult(await invoke("audio_transcribe_development", { runtime, modelPath, audioPath, timeoutSeconds })); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "FR-AUDIO-WHISPER-TRANSCRIBE"); }
+    finally { setBusy(false); }
+  }
+  return <section className="surface"><div className="surface-mark">LOCAL AUDIO RUNTIME</div><h2>{language === "fr" ? "Transcription locale avec whisper.cpp" : "Local whisper.cpp transcription"}</h2><p>{language === "fr" ? "Entrez les chemins locaux du runtime, du modèle et de l'audio. Aucun fichier ne quitte cette machine." : "Enter local paths for the runtime, model, and audio. No file leaves this machine."}</p><form className="project-form" onSubmit={event => void transcribe(event)}><label>{language === "fr" ? "Exécutable whisper.cpp" : "whisper.cpp executable"}<input value={runtime} onChange={event => setRuntime(event.target.value)} placeholder="whisper-cli" required /></label><label>{language === "fr" ? "Modèle local" : "Local model"}<input value={modelPath} onChange={event => setModelPath(event.target.value)} placeholder="C:\\models\\ggml-base.bin" required /></label><label>{language === "fr" ? "Audio local (.wav, .mp3, .flac, .ogg)" : "Local audio (.wav, .mp3, .flac, .ogg)"}<input value={audioPath} onChange={event => setAudioPath(event.target.value)} placeholder="C:\\audio\\recording.wav" required /></label><label>{language === "fr" ? "Limite en secondes" : "Timeout in seconds"}<input type="number" min="1" max="3600" value={timeoutSeconds} onChange={event => setTimeoutSeconds(Number(event.target.value))} required /></label><button className="action" type="submit" disabled={busy}>{busy ? (language === "fr" ? "Transcription" : "Transcribing") : (language === "fr" ? "Transcrire localement" : "Transcribe locally")}</button></form>{error && <p className="agent-error">{error}</p>}{result && <section className="activity-ledger"><div className="activity-heading"><Mic size={16} /><h3>{result.runtime}</h3></div><p>{result.output_bytes} bytes</p><MarkdownContent content={result.transcript} /></section>}</section>;
 }
 
 export function MarkdownContent({ content }: { content: string }) {
