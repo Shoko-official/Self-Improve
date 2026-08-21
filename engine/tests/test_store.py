@@ -44,6 +44,15 @@ class FrontierStoreTests(unittest.TestCase):
         with self.assertRaises(ArchivedProjectError):
             self.store.create_session(project_id, "Should not be created")
 
+    def test_archived_project_can_be_restored_without_losing_history(self) -> None:
+        project_id = self.store.create_project("Restorable project")
+        session_id = self.store.create_session(project_id, "Before archive")
+        self.store.archive_project(project_id)
+        self.store.restore_project(project_id)
+        self.assertEqual(self.store.search_sessions("Before", project_id)[0]["id"], session_id)
+        with self.assertRaises(KeyError):
+            self.store.restore_project(project_id)
+
     def test_projects_and_sessions_support_configuration_and_literal_search(self) -> None:
         project_id = self.store.create_project("Cell atlas", "Initial scope")
         session_id = self.store.create_session(project_id, "Review batch effects", "extended")

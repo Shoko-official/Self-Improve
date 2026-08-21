@@ -405,6 +405,8 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .workspace-list, .claim-list { display: grid; gap: 7px; margin-top: 18px; }
 .workspace-row, .claim-row { padding: 12px; background: var(--raised-bg); border: 1px solid var(--border); border-radius: 9px; }
 .workspace-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.archived-project-list { display: grid; gap: 6px; margin-top: 14px; }
+.archived-project-list > small { color: var(--text-faint); font-size: 10px; text-transform: uppercase; }
 .workspace-name { min-width: 0; }
 .workspace-name strong { display: block; }
 .workspace-name span { color: var(--text-faint); font-size: 11px; overflow-wrap: anywhere; }
