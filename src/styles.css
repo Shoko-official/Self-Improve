@@ -294,6 +294,39 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .science-evidence-view { height: 100%; display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr); overflow: auto; background: var(--panel-bg); }
 .science-evidence-view > .surface + .surface { border-left: 1px solid var(--border); }
 .science-workbench .surface { width: auto; margin: 0; padding: 26px; }
+.science-evidence-desk { background: var(--science-canvas); }
+.science-evidence-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+.science-evidence-header h2 { margin: 5px 0 6px; font-size: 22px; letter-spacing: -.025em; }
+.science-evidence-header p { max-width: 560px; margin: 0; color: var(--text-soft); font-size: 12px; line-height: 1.55; }
+.science-evidence-header .minor-action { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.science-evidence-counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 18px 0; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.science-evidence-counts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 11px 12px; background: var(--raised-bg); }
+.science-evidence-counts > div + div { border-left: 1px solid var(--border); }
+.science-evidence-counts span { color: var(--text-faint); font-size: 10px; text-transform: uppercase; letter-spacing: .055em; }
+.science-evidence-counts strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.science-evidence-section { padding: 19px 0; border-top: 1px solid var(--border); }
+.science-section-heading h3 { margin: 0 0 4px; font-size: 14px; }
+.science-section-heading p { margin: 0; color: var(--text-soft); font-size: 11px; line-height: 1.45; }
+.science-compact-form { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(120px, .65fr) 90px auto; align-items: end; gap: 8px; margin-top: 14px; }
+.science-compact-form label, .science-claim-form label { display: grid; gap: 5px; color: var(--text-soft); font-size: 10px; font-weight: 650; }
+.science-compact-form input, .science-claim-form input, .science-claim-form select { width: 100%; min-width: 0; padding: 8px 9px; background: var(--raised-bg); border: 1px solid var(--border); border-radius: 7px; font-size: 12px; }
+.science-compact-form .action, .science-claim-form .action { align-self: end; }
+.science-record-list, .science-claim-list { display: grid; margin-top: 13px; border-top: 1px solid var(--border); }
+.science-record-list > div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--border); font-size: 11px; }
+.science-record-list strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.science-record-list span { flex: 0 0 auto; color: var(--text-faint); font: 10px ui-monospace, "Cascadia Code", monospace; }
+.science-record-list > p, .science-claim-list > p { margin: 12px 0 0; color: var(--text-faint); font-size: 11px; }
+.science-claim-details, .science-technical-details { margin-top: 14px; }
+.science-claim-details > summary, .science-technical-details > summary { cursor: pointer; color: var(--text-soft); font-size: 11px; font-weight: 650; }
+.science-claim-form { display: grid; gap: 9px; margin-top: 12px; padding: 12px; background: var(--science-editor); border: 1px solid var(--border); border-radius: 8px; }
+.science-technical-details { padding-top: 9px; border-top: 1px solid var(--border); }
+.science-technical-details label { margin-top: 9px; }
+.science-claim-list article { display: grid; gap: 7px; padding: 12px 2px; border-bottom: 1px solid var(--border); }
+.science-claim-list article > div:first-child { display: flex; gap: 5px; }
+.science-claim-list article > div:first-child span { padding: 3px 6px; color: var(--text-faint); background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 5px; font: 9px ui-monospace, "Cascadia Code", monospace; }
+.science-claim-list strong { font-size: 12px; }
+.science-claim-list p { margin: 0; color: var(--text-soft); font-size: 11px; line-height: 1.45; }
+.science-claim-actions { display: flex; flex-wrap: wrap; gap: 5px; }
 .science-notebook-view { height: 100%; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr); background: var(--panel-bg); }
 .science-notebook-context { padding: 24px 18px; overflow: auto; background: var(--science-editor); border-right: 1px solid var(--border); }
 .science-notebook-context h3 { margin: 8px 0 6px; font-size: 15px; }
