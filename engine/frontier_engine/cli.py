@@ -46,6 +46,7 @@ from frontier_engine.reviewer import Claim, review_claims
 from frontier_engine.renderers import render_preview
 from frontier_engine.managed_runtime import verify_bundle
 from frontier_engine.notifications import NotificationStore
+from frontier_engine.image_runtime import ComfyUIAdapter
 
 
 _BACKGROUND_PROCESSES: dict[int, subprocess.Popen[bytes]] = {}
@@ -510,6 +511,21 @@ def provider_chat(kind: str, base_url: str, model: str, prompt: str, approved: b
     provider, _ = configured_provider(kind, base_url, api_key_env)
     output = "".join(provider.stream_chat(model, [{"role": "user", "content": prompt}], egress_approved=True))
     return {"output": output, "egress": preview}
+
+
+def image_runtime_health(base_url: str) -> dict[str, object]:
+    return ComfyUIAdapter(base_url).health()
+
+
+def image_runtime_submit(base_url: str, workflow_json: str, approved: bool) -> dict[str, object]:
+    try: workflow = json.loads(workflow_json)
+    except json.JSONDecodeError as error: raise ValueError("FR-IMAGE-COMFYUI-WORKFLOW") from error
+    if not isinstance(workflow, dict): raise ValueError("FR-IMAGE-COMFYUI-WORKFLOW")
+    return ComfyUIAdapter(base_url).submit(workflow, approved=approved)
+
+
+def image_runtime_history(base_url: str, prompt_id: str) -> dict[str, object]:
+    return ComfyUIAdapter(base_url).history(prompt_id)
 
 
 def rag_ingest(root: Path, source_uri: str, source_label: str, content: str) -> dict[str, object]:
@@ -1072,7 +1088,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "rag-ingest", "rag-search", "rag-evaluate", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "image-runtime-health", "image-runtime-submit", "image-runtime-history", "rag-ingest", "rag-search", "rag-evaluate", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1142,6 +1158,8 @@ def main() -> None:
     parser.add_argument("--provider-base-url")
     parser.add_argument("--api-key-env")
     parser.add_argument("--provider-approved", action="store_true")
+    parser.add_argument("--image-workflow-json")
+    parser.add_argument("--image-prompt-id")
     parser.add_argument("--source-uri")
     parser.add_argument("--source-label")
     parser.add_argument("--cases-json")
@@ -1440,6 +1458,15 @@ def main() -> None:
         if args.provider_kind is None or args.provider_base_url is None or args.model is None or args.prompt is None:
             parser.error("provider-chat requires --provider-kind, --provider-base-url, --model, and --prompt")
         result = provider_chat(args.provider_kind, args.provider_base_url, args.model, args.prompt, args.provider_approved, args.api_key_env)
+    elif args.command == "image-runtime-health":
+        if args.endpoint is None: parser.error("image-runtime-health requires --endpoint")
+        result = image_runtime_health(args.endpoint)
+    elif args.command == "image-runtime-submit":
+        if args.endpoint is None or args.image_workflow_json is None: parser.error("image-runtime-submit requires --endpoint and --image-workflow-json")
+        result = image_runtime_submit(args.endpoint, args.image_workflow_json, args.approved)
+    elif args.command == "image-runtime-history":
+        if args.endpoint is None or args.image_prompt_id is None: parser.error("image-runtime-history requires --endpoint and --image-prompt-id")
+        result = image_runtime_history(args.endpoint, args.image_prompt_id)
     elif args.command == "rag-ingest":
         if args.source_uri is None or args.source_label is None:
             parser.error("rag-ingest requires --source-uri and --source-label")

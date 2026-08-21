@@ -23,6 +23,7 @@ import {
   FolderKanban,
   Gauge,
   GitBranch,
+  Image,
   Library,
   ListTodo,
   MessageSquare,
@@ -64,7 +65,7 @@ type FolderGrant = { id: string; path: string; operation: string; revoked_at: st
 type GitContext = { linked: boolean; repository?: boolean; path?: string; branch?: string; changes?: number; status?: string[]; remote?: string | null; reason?: string; ci?: { available: boolean; latest?: { status: string; conclusion: string; name: string; url: string; updatedAt: string } | null; reason?: string } };
 type GitDiff = { linked: boolean; repository?: boolean; path?: string; files?: string[]; preview?: string; truncated?: boolean; scope?: string; reason?: string };
 type ProviderProfile = { kind: "openai-compatible" | "nvidia-nim"; baseUrl: string; credentialHandle: string; models: string[] };
-type Surface = "chat" | "workspaces" | "models" | "science" | "artifacts" | "automations" | "plugins" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
+type Surface = "chat" | "workspaces" | "models" | "science" | "images" | "artifacts" | "automations" | "plugins" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
 type Theme = "light" | "dark";
 type NavigationItem = { id: Surface; icon: LucideIcon; en: string; fr: string };
 const providerProfileKey = "frontier-provider-profile";
@@ -74,6 +75,7 @@ const navigation: NavigationItem[] = [
   { id: "workspaces", icon: FolderKanban, en: "Projects", fr: "Projets" },
   { id: "models", icon: Boxes, en: "Models", fr: "Modèles" },
   { id: "science", icon: FlaskConical, en: "Science", fr: "Science" },
+  { id: "images", icon: Image, en: "Images", fr: "Images" },
   { id: "artifacts", icon: FileStack, en: "Artifacts", fr: "Artefacts" },
   { id: "automations", icon: CalendarClock, en: "Scheduled", fr: "Planifié" },
   { id: "plugins", icon: Puzzle, en: "Plugins", fr: "Plugins" },
@@ -86,7 +88,7 @@ const navigation: NavigationItem[] = [
 ];
 
 export const primaryNavigation = navigation.filter(item => ["chat", "workspaces", "models", "science"].includes(item.id));
-export const secondaryNavigation = navigation.filter(item => ["artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "kernel"].includes(item.id));
+export const secondaryNavigation = navigation.filter(item => ["images", "artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "kernel"].includes(item.id));
 
 export function resolveProjectId(projects: ProjectRecord[], preferredProjectId: string, currentProjectId: string): string {
   if (projects.some(project => project.id === preferredProjectId)) return preferredProjectId;
@@ -306,6 +308,7 @@ export function App() {
             {surface === "workspaces" && <WorkspaceSurface projects={projectRecords} error={workspaceError} refresh={refreshWorkspaces} create={createWorkspace} />}
             {surface === "models" && <ModelsSurface report={report} error={error} probe={probe} engineReport={engineReport} engineError={engineError} probeEngine={probeEngine} projects={projectRecords} language={language} />}
             {surface === "science" && <ScienceWorkbench projects={projectRecords} language={language} />}
+            {surface === "images" && <ImageSurface language={language} />}
             {surface === "artifacts" && <ArtifactWorkspaceSurface language={language} />}
             {surface === "automations" && <AutomationsSurface projects={projectRecords} language={language} />}
             {surface === "plugins" && <PluginHubSurface language={language} projects={projectRecords} />}
@@ -677,6 +680,20 @@ export function ChatSurface({ projects, language, onNavigate, preferredProjectId
       </form>
     </section>
   );
+}
+
+function ImageSurface({ language }: { language: Language }) {
+  const [endpoint, setEndpoint] = useState("http://127.0.0.1:8188");
+  const [workflow, setWorkflow] = useState("");
+  const [approved, setApproved] = useState(false);
+  const [health, setHealth] = useState<{ nodes: string[]; endpoint: string } | null>(null);
+  const [job, setJob] = useState<{ prompt_id: string; state: string; outputs?: Array<{ filename: string }> } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  async function check() { try { setBusy(true); setError(null); setHealth(await invoke("image_runtime_health_development", { endpoint })); } catch (reason) { setHealth(null); setError(reason instanceof Error ? reason.message : "FR-IMAGE-COMFYUI-UNAVAILABLE"); } finally { setBusy(false); } }
+  async function submit(event: FormEvent) { event.preventDefault(); try { setBusy(true); setError(null); setJob(await invoke("image_runtime_submit_development", { endpoint, workflowJson: workflow, approved })); } catch (reason) { setError(reason instanceof Error ? reason.message : "FR-IMAGE-COMFYUI-SUBMIT"); } finally { setBusy(false); } }
+  async function refreshJob() { if (!job) return; try { setBusy(true); setError(null); setJob(await invoke("image_runtime_history_development", { endpoint, promptId: job.prompt_id })); } catch (reason) { setError(reason instanceof Error ? reason.message : "FR-IMAGE-COMFYUI-HISTORY"); } finally { setBusy(false); } }
+  return <section className="surface"><div className="surface-mark">LOCAL IMAGE RUNTIME</div><h2>{language === "fr" ? "Images avec ComfyUI local" : "Images with local ComfyUI"}</h2><p>{language === "fr" ? "Shoko utilise uniquement une instance ComfyUI locale. Aucun prompt ni image n'est envoyée à un fournisseur distant." : "Shoko uses only a local ComfyUI instance. No prompt or image is sent to a remote provider."}</p><form className="project-form" onSubmit={event => void submit(event)}><label>ComfyUI endpoint<input type="url" value={endpoint} onChange={event => setEndpoint(event.target.value)} required /></label><button className="minor-action" type="button" onClick={() => void check()} disabled={busy}>{language === "fr" ? "Vérifier ComfyUI" : "Check ComfyUI"}</button><label>{language === "fr" ? "Workflow ComfyUI JSON" : "ComfyUI workflow JSON"}<textarea value={workflow} onChange={event => setWorkflow(event.target.value)} placeholder='{"node-id":{"class_type":"...","inputs":{}}}' spellCheck={false} required /></label><label className="approval-check"><input type="checkbox" checked={approved} onChange={event => setApproved(event.target.checked)} />{language === "fr" ? "J'autorise cette exécution locale." : "I approve this local execution."}</label><button className="action" type="submit" disabled={busy || !approved}>{language === "fr" ? "Soumettre le workflow" : "Submit workflow"}</button></form>{error && <p className="agent-error">{error}</p>}{health && <Evidence rows={[`${health.nodes.length} ${language === "fr" ? "nœuds détectés" : "nodes detected"}`, health.endpoint]} />}{job && <section className="activity-ledger"><div className="activity-heading"><Image size={16} /><h3>{job.state}: {job.prompt_id}</h3></div><button type="button" className="minor-action" onClick={() => void refreshJob()} disabled={busy}>{language === "fr" ? "Actualiser le job" : "Refresh job"}</button>{job.outputs && <Evidence rows={job.outputs.map(output => output.filename)} />}</section>}</section>;
 }
 
 export function MarkdownContent({ content }: { content: string }) {

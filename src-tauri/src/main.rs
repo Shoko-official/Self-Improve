@@ -850,6 +850,48 @@ fn provider_chat_development(
 }
 
 #[tauri::command]
+fn image_runtime_health_development(endpoint: String) -> Result<serde_json::Value, String> {
+    run_development_engine(&[
+        "image-runtime-health".to_owned(),
+        "--endpoint".to_owned(),
+        endpoint,
+    ])
+}
+
+#[tauri::command]
+fn image_runtime_submit_development(
+    endpoint: String,
+    workflow_json: String,
+    approved: bool,
+) -> Result<serde_json::Value, String> {
+    let mut arguments = vec![
+        "image-runtime-submit".to_owned(),
+        "--endpoint".to_owned(),
+        endpoint,
+        "--image-workflow-json".to_owned(),
+        workflow_json,
+    ];
+    if approved {
+        arguments.push("--approved".to_owned());
+    }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn image_runtime_history_development(
+    endpoint: String,
+    prompt_id: String,
+) -> Result<serde_json::Value, String> {
+    run_development_engine(&[
+        "image-runtime-history".to_owned(),
+        "--endpoint".to_owned(),
+        endpoint,
+        "--image-prompt-id".to_owned(),
+        prompt_id,
+    ])
+}
+
+#[tauri::command]
 fn rag_ingest_development(
     source_uri: String,
     source_label: String,
@@ -1443,6 +1485,9 @@ fn main() {
             provider_health_development,
             provider_egress_preview_development,
             provider_chat_development,
+            image_runtime_health_development,
+            image_runtime_submit_development,
+            image_runtime_history_development,
             rag_ingest_development,
             rag_search_development,
             rag_evaluate_development,
