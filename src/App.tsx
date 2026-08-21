@@ -63,9 +63,11 @@ type KernelResult = { project_id: string; execution: { state: string; stdout: st
 type FolderGrant = { id: string; path: string; operation: string; revoked_at: string | null };
 type GitContext = { linked: boolean; repository?: boolean; path?: string; branch?: string; changes?: number; status?: string[]; remote?: string | null; reason?: string; ci?: { available: boolean; latest?: { status: string; conclusion: string; name: string; url: string; updatedAt: string } | null; reason?: string } };
 type GitDiff = { linked: boolean; repository?: boolean; path?: string; files?: string[]; preview?: string; truncated?: boolean; scope?: string; reason?: string };
+type ProviderProfile = { kind: "openai-compatible" | "nvidia-nim"; baseUrl: string; credentialHandle: string; models: string[] };
 type Surface = "chat" | "workspaces" | "models" | "science" | "artifacts" | "automations" | "plugins" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
 type Theme = "light" | "dark";
 type NavigationItem = { id: Surface; icon: LucideIcon; en: string; fr: string };
+const providerProfileKey = "frontier-provider-profile";
 
 const navigation: NavigationItem[] = [
   { id: "chat", icon: MessageSquare, en: "Chat", fr: "Discussion" },
@@ -397,6 +399,8 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
   const [accessMode, setAccessMode] = useState("ask");
   const [reasoningEffort, setReasoningEffort] = useState("standard");
   const [workMode, setWorkMode] = useState<"chat" | "plan">("chat");
+  const [providerProfile, setProviderProfile] = useState<ProviderProfile | null>(null);
+  const [remotePreview, setRemotePreview] = useState<{ prompt: string; model: string; profile: ProviderProfile; endpoint: string; textBytes: number } | null>(null);
 
   useEffect(() => {
     const nextProjectId = activeProjects.some(project => project.id === projectId) ? projectId : activeProjects[0]?.id ?? "";
@@ -415,6 +419,12 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
     void invoke<{ skills: RegistryEntry[] }>("scientific_skills_development")
       .then(result => setAvailableSkills(result.skills.filter(skill => skill.availability === "validated-manifest")))
       .catch(() => setAvailableSkills([]));
+  }, []);
+
+  useEffect(() => {
+    function readProfile() { try { const value = localStorage.getItem(providerProfileKey); setProviderProfile(value ? JSON.parse(value) as ProviderProfile : null); } catch { setProviderProfile(null); } }
+    readProfile(); window.addEventListener("frontier-provider-profile", readProfile);
+    return () => window.removeEventListener("frontier-provider-profile", readProfile);
   }, []);
 
   useEffect(() => {
@@ -503,6 +513,17 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
       return;
     }
     if (!projectId || !model.trim() || !trimmedPrompt) return;
+    if (model.startsWith("provider:")) {
+      const remoteModel = model.slice("provider:".length);
+      if (!providerProfile) { setError("FR-PROVIDER-PROFILE-MISSING"); return; }
+      setBusy(true); setError(null);
+      try {
+        const preview = await invoke<{ endpoint: string; text_bytes: number }>("provider_egress_preview_development", { providerKind: providerProfile.kind, providerBaseUrl: providerProfile.baseUrl, prompt: trimmedPrompt, apiKeyEnv: providerProfile.credentialHandle || null });
+        setRemotePreview({ prompt: trimmedPrompt, model: remoteModel, profile: providerProfile, endpoint: preview.endpoint, textBytes: preview.text_bytes });
+      } catch (reason) { setError(reason instanceof Error ? reason.message : "FR-PROVIDER-PREVIEW-FAILED"); }
+      finally { setBusy(false); }
+      return;
+    }
     setBusy(true);
     setError(null);
     setOutput(null);
@@ -518,6 +539,16 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
     } finally {
       setBusy(false);
     }
+  }
+
+  async function approveRemoteChat() {
+    if (!remotePreview) return;
+    setBusy(true); setError(null); setOutput(null); setLastPrompt(remotePreview.prompt);
+    try {
+      const result = await invoke<{ output: string }>("provider_chat_development", { providerKind: remotePreview.profile.kind, providerBaseUrl: remotePreview.profile.baseUrl, model: remotePreview.model, prompt: remotePreview.prompt, apiKeyEnv: remotePreview.profile.credentialHandle || null, approved: true });
+      setOutput(result.output); setPrompt(""); setRemotePreview(null);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "FR-PROVIDER-CHAT-FAILED"); }
+    finally { setBusy(false); }
   }
 
   async function manageTodo(todoId: string, operation: string, todoText?: string) {
@@ -555,6 +586,8 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
             <div><strong>{language === "fr" ? "Exécution interrompue" : "Run stopped"}</strong><p>{error}</p></div>
           </div>
         )}
+
+        {remotePreview && <section className="activity-ledger"><div className="activity-heading"><ShieldCheck size={16} /><h3>{language === "fr" ? "Autorisation d'egress requise" : "Egress approval required"}</h3></div><p>{remotePreview.endpoint}<br />{remotePreview.textBytes} {language === "fr" ? "octets de texte seront transmis." : "text bytes will be sent."}</p><div className="workspace-row"><button className="minor-action" type="button" onClick={() => setRemotePreview(null)}>{language === "fr" ? "Annuler" : "Cancel"}</button><button className="action" type="button" onClick={() => void approveRemoteChat()} disabled={busy}>{language === "fr" ? "Autoriser cet envoi" : "Approve this request"}</button></div></section>}
 
         {output !== null && (
           <article className="chat-message assistant-message">
@@ -616,7 +649,7 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
           <div className="composer-tools-left">
             <button className="composer-tool composer-symbol" type="button" onClick={() => { setPrompt("/"); setPalette("commands"); }} aria-label={language === "fr" ? "Ouvrir les commandes" : "Open commands"}>/</button>
             <button className="composer-tool composer-symbol" type="button" onClick={() => { setPrompt("$"); setPalette("resources"); }} aria-label={language === "fr" ? "Choisir un skill" : "Choose a skill"}>$</button>
-            <label className="composer-select"><Boxes size={14} /><select value={model} onChange={event => setModel(event.target.value)} aria-label={language === "fr" ? "Modèle local" : "Local model"}><option value="">{language === "fr" ? "Choisir un modèle" : "Choose model"}</option>{catalog?.shoko_gguf.available && catalog.lm_studio_library.models.map(item => <option value={`gguf:${item.path}`} key={item.path}>{item.display_name}</option>)}{catalog?.ollama.models.map(item => <option value={item} key={item}>{item}</option>)}</select></label>
+            <label className="composer-select"><Boxes size={14} /><select value={model} onChange={event => setModel(event.target.value)} aria-label={language === "fr" ? "Modèle" : "Model"}><option value="">{language === "fr" ? "Choisir un modèle" : "Choose model"}</option>{catalog?.shoko_gguf.available && catalog.lm_studio_library.models.map(item => <option value={`gguf:${item.path}`} key={item.path}>{item.display_name}</option>)}{catalog?.ollama.models.map(item => <option value={item} key={item}>{item}</option>)}{providerProfile?.models.map(item => <option value={`provider:${item}`} key={`provider:${item}`}>{item} ({providerProfile.kind})</option>)}</select></label>
             <label className="composer-select"><ShieldCheck size={14} /><select value={accessMode} onChange={event => setAccessMode(event.target.value)} aria-label={language === "fr" ? "Accès de l’IA" : "AI access"}><option value="read">{language === "fr" ? "Lecture" : "Read"}</option><option value="ask">{language === "fr" ? "Demander" : "Ask"}</option><option value="full">{language === "fr" ? "Accès complet" : "Full access"}</option></select></label>
             <label className="composer-select"><Gauge size={14} /><select value={reasoningEffort} onChange={event => setReasoningEffort(event.target.value)} aria-label={language === "fr" ? "Effort de raisonnement" : "Reasoning effort"}><option value="compact">{language === "fr" ? "Rapide" : "Fast"}</option><option value="standard">Standard</option><option value="extended">{language === "fr" ? "Approfondi" : "Extended"}</option></select></label>
             {workMode === "plan" && <button className="composer-skill-chip" type="button" onClick={() => setWorkMode("chat")}>{language === "fr" ? "Mode plan" : "Plan mode"}</button>}
@@ -1253,7 +1286,12 @@ function ProviderSettings({ language }: { language: Language }) {
   const [checking, setChecking] = useState(false);
   async function check(event: FormEvent) {
     event.preventDefault(); setChecking(true); setError(null); setResult(null);
-    try { setResult(await invoke("provider_health_development", { providerKind: kind, providerBaseUrl: baseUrl, apiKeyEnv: credentialHandle.trim() || null })); }
+    try {
+      const health = await invoke<{ provider: string; healthy: boolean; models: string[]; credential_configured: boolean; credential_handle: string | null }>("provider_health_development", { providerKind: kind, providerBaseUrl: baseUrl, apiKeyEnv: credentialHandle.trim() || null });
+      setResult(health);
+      localStorage.setItem(providerProfileKey, JSON.stringify({ kind, baseUrl, credentialHandle: credentialHandle.trim(), models: health.models } satisfies ProviderProfile));
+      window.dispatchEvent(new Event("frontier-provider-profile"));
+    }
     catch (reason) { setError(reason instanceof Error ? reason.message : language === "fr" ? "La vérification du fournisseur a échoué." : "Provider verification failed."); }
     finally { setChecking(false); }
   }
