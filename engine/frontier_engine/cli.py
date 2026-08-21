@@ -829,7 +829,9 @@ def artifact_preview(root: Path, version_id: str) -> dict[str, object]:
     finally: store.close()
     try: text = content.decode("utf-8")
     except UnicodeDecodeError as error: raise ValueError("FR-RENDERER-CONTENT-NOT-UTF8") from error
-    return {"artifact_version_id": version_id, **render_preview(media_type, text)}
+    preview = render_preview(media_type, text)
+    if media_type == "text/markdown": preview["markdown"] = text
+    return {"artifact_version_id": version_id, **preview}
 
 
 def _require_artifact_version(root: Path, version_id: str) -> None:

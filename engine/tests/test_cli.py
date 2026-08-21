@@ -260,12 +260,14 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             project_id = create_project(root, "Artifacts")["id"]
-            artifact = create_artifact(root, project_id, "result.md", "text/markdown", "# Result")
+            markdown = "# Result\n\n- [x] verified\n\n| metric | value |\n| --- | ---: |\n| score | 42 |"
+            artifact = create_artifact(root, project_id, "result.md", "text/markdown", markdown)
             self.assertEqual(artifacts(root, project_id)["artifacts"][0]["name"], "result.md")
             versioned_artifact = artifact_versions(root, artifact["id"])
             self.assertEqual(versioned_artifact["versions"][0]["execution_log"]["state"], "not_executed")
             self.assertEqual(versioned_artifact["preview"]["artifact_version_id"], versioned_artifact["versions"][0]["id"])
             self.assertEqual(versioned_artifact["preview"]["renderer_id"], "markdown.basic")
+            self.assertEqual(versioned_artifact["preview"]["markdown"], markdown)
 
     def test_annotations_require_an_exact_artifact_version_and_consume_once(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
