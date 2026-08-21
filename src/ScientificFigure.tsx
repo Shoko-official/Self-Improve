@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useId, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Braces, ChartScatter, CircleAlert, Dna, Eye, Grid3x3, MousePointer2, Save, SlidersHorizontal } from "lucide-react";
+import { Braces, ChartScatter, CircleAlert, Dna, Eye, GitBranch, Grid3x3, MousePointer2, Save, SlidersHorizontal } from "lucide-react";
 import type { Language } from "./i18n";
 
 type ScatterPoint = { id: string; x: number; y: number; category: string; label: string };
@@ -117,7 +117,7 @@ export const figureTemplates: Record<ScientificFigureData["kind"], string> = {
 
 function localFigurePreview(source: string): FigurePreview {
   const figure = JSON.parse(source) as ScientificFigureData;
-  if (figure.version !== 1 || !["scatter", "matrix", "sequence"].includes(figure.kind)) {
+  if (figure.version !== 1 || !["scatter", "matrix", "sequence", "tree", "genome"].includes(figure.kind)) {
     throw new Error("FR-RENDERER-FIGURE: unsupported local figure contract");
   }
   return {
@@ -317,8 +317,8 @@ export function ScientificFigureWorkbench({ projects, language }: { projects: Pr
     }
   }
 
-  const figureItemCount = preview?.figure.kind === "scatter" ? preview.figure.points?.length ?? 0 : preview?.figure.kind === "matrix" ? preview.figure.cells?.length ?? 0 : preview?.figure.features?.length ?? 0;
-  const figureDimension = preview?.figure.kind === "scatter" ? `${new Set(preview.figure.points?.map(point => point.category)).size} families` : preview?.figure.kind === "matrix" ? `${preview.figure.rows?.length ?? 0} × ${preview.figure.columns?.length ?? 0}` : `${preview?.figure.length ?? 0} aa`;
+  const figureItemCount = preview?.figure.kind === "scatter" ? preview.figure.points?.length ?? 0 : preview?.figure.kind === "matrix" ? preview.figure.cells?.length ?? 0 : preview?.figure.kind === "tree" ? preview.figure.nodes?.length ?? 0 : preview?.figure.features?.length ?? 0;
+  const figureDimension = preview?.figure.kind === "scatter" ? `${new Set(preview.figure.points?.map(point => point.category)).size} families` : preview?.figure.kind === "matrix" ? `${preview.figure.rows?.length ?? 0} × ${preview.figure.columns?.length ?? 0}` : preview?.figure.kind === "tree" ? (language === "fr" ? "topologie" : "topology") : `${preview?.figure.length ?? 0} ${preview?.figure.kind === "genome" ? "bp" : "aa"}`;
 
   return <section className="figure-workbench">
     <div className="figure-preview-pane">
@@ -337,6 +337,8 @@ export function ScientificFigureWorkbench({ projects, language }: { projects: Pr
           <button type="button" aria-pressed={kind === "scatter"} onClick={() => chooseKind("scatter")}><ChartScatter size={14} />Atlas</button>
           <button type="button" aria-pressed={kind === "matrix"} onClick={() => chooseKind("matrix")}><Grid3x3 size={14} />Matrix</button>
           <button type="button" aria-pressed={kind === "sequence"} onClick={() => chooseKind("sequence")}><Dna size={14} />Sequence</button>
+          <button type="button" aria-pressed={kind === "tree"} onClick={() => chooseKind("tree")}><GitBranch size={14} />{language === "fr" ? "Arbre" : "Tree"}</button>
+          <button type="button" aria-pressed={kind === "genome"} onClick={() => chooseKind("genome")}><Dna size={14} />Genome</button>
         </div>
         <dl className="figure-summary"><div><dt>{language === "fr" ? "Vue" : "View"}</dt><dd>{preview?.figure.title ?? kind}</dd></div><div><dt>{language === "fr" ? "Marques" : "Marks"}</dt><dd>{figureItemCount}</dd></div><div><dt>{language === "fr" ? "Structure" : "Structure"}</dt><dd>{figureDimension}</dd></div></dl>
         <details className="figure-source-panel">

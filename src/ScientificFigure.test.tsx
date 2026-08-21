@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ScientificFigureView, figureTemplates, type ScientificFigureData } from "./ScientificFigure";
 
 describe("ScientificFigureView", () => {
-  it.each(["scatter", "matrix", "sequence"] as const)("renders accessible %s selectors", kind => {
+  it.each(["scatter", "matrix", "sequence", "tree", "genome"] as const)("renders accessible %s selectors", kind => {
     const figure = JSON.parse(figureTemplates[kind]) as ScientificFigureData;
     const html = renderToStaticMarkup(<ScientificFigureView figure={figure} onSelect={() => undefined} />);
 

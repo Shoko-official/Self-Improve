@@ -347,7 +347,7 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .figure-editor-heading h3 { font-size: 12px; }
 .figure-editor-heading p { margin-top: 2px; color: var(--text-faint); font: 9px ui-monospace, "Cascadia Code", monospace; }
 .figure-editor form { display: grid; gap: 12px; margin-top: 14px; }
-.figure-kind-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
+.figure-kind-switch { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-bottom: 1px solid var(--border); }
 .figure-kind-switch button { display: grid; justify-items: center; gap: 5px; padding: 9px 4px; color: var(--text-faint); background: transparent; border: 0; border-bottom: 1px solid transparent; font-size: 9px; }
 .figure-kind-switch button:hover { color: var(--text); }
 .figure-kind-switch button[aria-pressed="true"] { color: var(--text); border-bottom-color: var(--text); }
