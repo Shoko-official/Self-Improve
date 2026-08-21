@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { MarkdownContent, mcpMarkdown } from "./App";
+import { ArtifactPreviewPanel, MarkdownContent, mcpMarkdown } from "./App";
 
 describe("MarkdownContent", () => {
   it("renders GitHub-flavored Markdown structures", () => {
@@ -24,6 +24,18 @@ describe("MarkdownContent", () => {
     expect(html).toContain("&lt;script&gt;");
     expect(html).toContain('target="_blank"');
     expect(html).toContain('rel="noreferrer"');
+  });
+});
+
+describe("ArtifactPreviewPanel", () => {
+  it("uses the safe GFM renderer for versioned Markdown source", () => {
+    const html = renderToStaticMarkup(
+      <ArtifactPreviewPanel preview={{ artifact_version_id: "version-123", renderer_id: "markdown.basic", renderer_version: "1", source_sha256: "a".repeat(64), html: "<p>fallback</p>", markdown: "- [x] rendered\n\n<script>blocked</script>" }} />,
+    );
+
+    expect(html).toContain('type="checkbox"');
+    expect(html).toContain("&lt;script&gt;blocked&lt;/script&gt;");
+    expect(html).not.toContain("<p>fallback</p>");
   });
 });
 

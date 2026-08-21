@@ -238,6 +238,7 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .artifact-preview > header code, .artifact-preview > footer { font: 10px ui-monospace, "Cascadia Code", monospace; }
 .artifact-preview > footer { justify-content: flex-start; flex-wrap: wrap; border-top: 1px solid var(--border); }
 .artifact-rendered-html { max-height: 440px; padding: 18px; overflow: auto; }
+.artifact-rendered-markdown { max-height: 440px; padding: 18px; overflow: auto; }
 .artifact-rendered-html .cell-meta { margin-bottom: 6px; color: var(--text-faint); font: 10px ui-monospace, "Cascadia Code", monospace; }
 .artifact-rendered-html section + section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 .artifact-figure-preview { height: 460px; min-height: 260px; }
