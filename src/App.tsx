@@ -76,13 +76,15 @@ const navigation: NavigationItem[] = [
   { id: "settings", icon: Settings, en: "Settings", fr: "Réglages" },
 ];
 
-const primaryNavigation = navigation.filter(item => ["workspaces", "science", "automations", "plugins"].includes(item.id));
+const primaryNavigation = navigation.filter(item => ["chat", "workspaces", "models", "science", "automations", "plugins"].includes(item.id));
+const secondaryNavigation = navigation.filter(item => ["artifacts", "mcp", "skills", "extensions", "compute", "kernel"].includes(item.id));
 
 export function App() {
   const [surface, setSurface] = useState<Surface>("chat");
   const [language, setLanguage] = useState<Language>(() => localStorage.getItem("frontier-language") === "fr" ? "fr" : "en");
   const [theme, setTheme] = useState<Theme>(() => localStorage.getItem("frontier-theme") === "light" ? "light" : "dark");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [moreNavigationOpen, setMoreNavigationOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [chatKey, setChatKey] = useState(0);
   const [report, setReport] = useState<CapabilityReport | null>(null);
@@ -95,6 +97,7 @@ export function App() {
   const ActiveIcon = activeItem.icon;
   const activeProjects = projectRecords?.filter(project => project.archived_at === null) ?? [];
   const showInspector = inspectorOpen && surface === "chat" && activeProjects.length > 0;
+  const secondarySurfaceActive = secondaryNavigation.some(item => item.id === surface);
 
   async function probe() {
     setError(null);
@@ -194,6 +197,13 @@ export function App() {
 
         <nav className="sidebar-nav" aria-label={language === "fr" ? "Sections" : "Sections"}>
           {primaryNavigation.map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
+          <button className="nav-button secondary-navigation-toggle" type="button" onClick={() => setMoreNavigationOpen(value => !value)} aria-expanded={moreNavigationOpen} aria-controls="secondary-navigation" aria-current={secondarySurfaceActive ? "page" : undefined}>
+            <ChevronRight size={16} className={moreNavigationOpen ? "rotate-90" : undefined} />
+            <span>{language === "fr" ? "Plus d’outils" : "More tools"}</span>
+          </button>
+          {(moreNavigationOpen || secondarySurfaceActive) && <div id="secondary-navigation" className="sidebar-secondary-nav" aria-label={language === "fr" ? "Outils supplémentaires" : "Additional tools"}>
+            {secondaryNavigation.map(item => <NavigationButton key={item.id} item={item} language={language} current={surface} onSelect={setSurface} />)}
+          </div>}
         </nav>
 
         <div className="project-shortlist">
