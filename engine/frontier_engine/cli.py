@@ -39,6 +39,7 @@ from frontier_engine.storage import StorageProfile, build_manifest, execute_loca
 from frontier_engine.s3_signing import S3Credentials
 from frontier_engine.scientific_registry import connector_catalog, extension_catalog, skill_catalog
 from frontier_engine.compute import ComputePlan, run_remote
+from frontier_engine.providers import NvidiaNimProvider, OpenAICompatibleProvider, ProviderConfig
 from frontier_engine.workspace_tools import ProjectWorkspaceTools
 from frontier_engine.reviewer import Claim, review_claims
 from frontier_engine.renderers import render_preview
@@ -461,6 +462,18 @@ def local_model_catalog(root: Path | None = None) -> dict[str, object]:
         "lm_studio_library": probe_lm_studio_library(),
         "registered_models": registered_models,
     }
+
+
+def provider_health(kind: str, base_url: str, api_key_env: str | None = None) -> dict[str, object]:
+    if kind not in {"openai-compatible", "nvidia-nim"}:
+        raise ValueError("FR-PROVIDER-KIND")
+    if not base_url.startswith("https://"):
+        raise ValueError("FR-PROVIDER-HTTPS")
+    if api_key_env is not None and (not api_key_env or not api_key_env.replace("_", "").isalnum() or not api_key_env[0].isalpha()):
+        raise ValueError("FR-PROVIDER-CREDENTIAL-HANDLE")
+    api_key = os.environ.get(api_key_env) if api_key_env else None
+    provider = NvidiaNimProvider(base_url, api_key) if kind == "nvidia-nim" else OpenAICompatibleProvider(ProviderConfig("OpenAI-compatible", base_url, api_key))
+    return {**provider.health(), "kind": kind, "credential_configured": bool(api_key_env and api_key), "credential_handle": api_key_env}
 
 
 def install_shoko_gguf_runtime(root: Path) -> dict[str, object]:
@@ -995,7 +1008,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1061,6 +1074,9 @@ def main() -> None:
     parser.add_argument("--generation-id")
     parser.add_argument("--runtime")
     parser.add_argument("--model")
+    parser.add_argument("--provider-kind")
+    parser.add_argument("--provider-base-url")
+    parser.add_argument("--api-key-env")
     parser.add_argument("--profile-model", action="append")
     parser.add_argument("--context-length", type=int)
     parser.add_argument("--cpu-threads", type=int)
@@ -1344,6 +1360,10 @@ def main() -> None:
         result = probe_lm_studio_library()
     elif args.command == "local-model-catalog":
         result = local_model_catalog(root)
+    elif args.command == "provider-health":
+        if args.provider_kind is None or args.provider_base_url is None:
+            parser.error("provider-health requires --provider-kind and --provider-base-url")
+        result = provider_health(args.provider_kind, args.provider_base_url, args.api_key_env)
     elif args.command == "reference-lmstudio-model":
         if args.path is None:
             parser.error("reference-lmstudio-model requires --path")
