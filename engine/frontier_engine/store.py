@@ -391,6 +391,18 @@ class FrontierStore:
             for row in rows
         ]
 
+    def artifact_preview_source(self, version_id: str) -> tuple[str, bytes]:
+        row = self.connection.execute(
+            "SELECT a.media_type, v.content_path, v.content_hash FROM artifact_versions v JOIN artifacts a ON a.id = v.artifact_id WHERE v.id = ?",
+            (version_id,),
+        ).fetchone()
+        if row is None: raise KeyError("Artifact version not found")
+        path = (self.root / row["content_path"]).resolve()
+        if self.content_root.resolve() not in path.parents or not path.is_file(): raise ValueError("FR-ARTIFACT-CONTENT-MISSING")
+        content = path.read_bytes()
+        if hashlib.sha256(content).hexdigest() != row["content_hash"]: raise ValueError("FR-ARTIFACT-CONTENT-HASH-MISMATCH")
+        return str(row["media_type"]), content
+
     def search_artifacts(self, query: str, project_id: str | None = None, media_type: str | None = None) -> list[dict[str, object]]:
         query = query.strip()
         if not query:
