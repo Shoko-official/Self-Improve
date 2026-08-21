@@ -43,6 +43,7 @@ from frontier_engine.workspace_tools import ProjectWorkspaceTools
 from frontier_engine.reviewer import Claim, review_claims
 from frontier_engine.renderers import render_preview
 from frontier_engine.managed_runtime import verify_bundle
+from frontier_engine.notifications import NotificationStore
 
 
 _BACKGROUND_PROCESSES: dict[int, subprocess.Popen[bytes]] = {}
@@ -727,6 +728,18 @@ def manage_goal(root: Path, project_id: str, action: str, text: str | None = Non
         return {"plan": state.plan(project_id), "plan_state": state.plan_state(project_id)}
     finally: state.close()
 
+def pending_notifications(root: Path) -> dict[str, object]:
+    store = NotificationStore(root / "notifications.sqlite3")
+    try: return {"notifications": [notification.__dict__ for notification in store.pending()]}
+    finally: store.close()
+
+def acknowledge_notification(root: Path, notification_id: str) -> dict[str, object]:
+    store = NotificationStore(root / "notifications.sqlite3")
+    try:
+        store.acknowledge(notification_id)
+        return {"notifications": [notification.__dict__ for notification in store.pending()]}
+    finally: store.close()
+
 
 def artifacts(root: Path, project_id: str) -> dict[str, object]:
     store = FrontierStore(root)
@@ -908,7 +921,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "search-sessions", "archive-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -951,6 +964,7 @@ def main() -> None:
     parser.add_argument("--operation")
     parser.add_argument("--todo-id")
     parser.add_argument("--todo-text")
+    parser.add_argument("--notification-id")
     parser.add_argument("--working-directory", type=Path)
     parser.add_argument("--workspace", type=Path)
     parser.add_argument("--workspace-action", choices=("list", "read", "write"))
@@ -1210,6 +1224,12 @@ def main() -> None:
                 result = manage_todo(root, args.project_id, args.todo_id, args.operation, args.todo_text)
         else:
             result = agent_activity(root, args.project_id)
+    elif args.command == "notifications":
+        result = pending_notifications(root)
+    elif args.command == "acknowledge-notification":
+        if args.notification_id is None:
+            parser.error("acknowledge-notification requires --notification-id")
+        result = acknowledge_notification(root, args.notification_id)
     elif args.command == "generations":
         result = generations(root, args.project_id, args.generation_id)
     elif args.command == "generate-local":
