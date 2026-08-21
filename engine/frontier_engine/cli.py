@@ -818,7 +818,18 @@ def artifact_versions(root: Path, artifact_id: str) -> dict[str, object]:
         versions = store.artifact_versions(artifact_id)
     finally:
         store.close()
-    return {"artifact_id": artifact_id, "versions": versions}
+    preview = artifact_preview(root, str(versions[-1]["id"])) if versions else None
+    return {"artifact_id": artifact_id, "versions": versions, "preview": preview}
+
+
+def artifact_preview(root: Path, version_id: str) -> dict[str, object]:
+    store = FrontierStore(root)
+    try:
+        media_type, content = store.artifact_preview_source(version_id)
+    finally: store.close()
+    try: text = content.decode("utf-8")
+    except UnicodeDecodeError as error: raise ValueError("FR-RENDERER-CONTENT-NOT-UTF8") from error
+    return {"artifact_version_id": version_id, **render_preview(media_type, text)}
 
 
 def _require_artifact_version(root: Path, version_id: str) -> None:
@@ -970,7 +981,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1363,6 +1374,10 @@ def main() -> None:
         if args.artifact_id is None:
             parser.error("artifact-versions requires --artifact-id")
         result = artifact_versions(root, args.artifact_id)
+    elif args.command == "artifact-preview":
+        if args.artifact_version_id is None:
+            parser.error("artifact-preview requires --artifact-version-id")
+        result = artifact_preview(root, args.artifact_version_id)
     elif args.command == "annotations":
         if args.artifact_version_id is None:
             parser.error("annotations requires --artifact-version-id")

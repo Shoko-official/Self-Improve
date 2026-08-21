@@ -262,7 +262,10 @@ class CliTests(unittest.TestCase):
             project_id = create_project(root, "Artifacts")["id"]
             artifact = create_artifact(root, project_id, "result.md", "text/markdown", "# Result")
             self.assertEqual(artifacts(root, project_id)["artifacts"][0]["name"], "result.md")
-            self.assertEqual(artifact_versions(root, artifact["id"])["versions"][0]["execution_log"]["state"], "not_executed")
+            versioned_artifact = artifact_versions(root, artifact["id"])
+            self.assertEqual(versioned_artifact["versions"][0]["execution_log"]["state"], "not_executed")
+            self.assertEqual(versioned_artifact["preview"]["artifact_version_id"], versioned_artifact["versions"][0]["id"])
+            self.assertEqual(versioned_artifact["preview"]["renderer_id"], "markdown.basic")
 
     def test_annotations_require_an_exact_artifact_version_and_consume_once(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
