@@ -8,11 +8,20 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import acknowledge_notification, agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, manage_goal, manage_todo, pending_notifications, plan_huggingface_model_download, project_folders, project_git_context, projects, provider_chat, provider_egress_preview, provider_health, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
+from frontier_engine.cli import acknowledge_notification, agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, manage_goal, manage_todo, pending_notifications, plan_huggingface_model_download, project_folders, project_git_context, projects, provider_chat, provider_egress_preview, provider_health, rag_evaluate, rag_ingest, rag_search, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
 class CliTests(unittest.TestCase):
+    def test_rag_commands_keep_exact_citation_offsets_and_held_out_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertEqual(rag_ingest(root, "file:///notes/hydrogen.md", "Hydrogen", "Hydrogen is stored.\n\nNickel catalyzes." )["chunks"], 2)
+            result = rag_search(root, "hydrogen")
+            self.assertEqual(result["citations"][0]["source_uri"], "file:///notes/hydrogen.md")
+            self.assertEqual(result["citations"][0]["start_offset"], 0)
+            self.assertEqual(rag_evaluate(root, '[{"query":"nickel","expected_sources":["file:///notes/hydrogen.md"]}]')["recall_at_k"], 1.0)
+
     def test_provider_health_uses_only_a_named_environment_credential(self) -> None:
         with patch("frontier_engine.cli.OpenAICompatibleProvider") as provider_type, patch.dict(os.environ, {"FRONTIER_PROVIDER_KEY": "secret"}, clear=False):
             provider_type.return_value.health.return_value = {"provider": "OpenAI-compatible", "healthy": True, "models": ["model-a"]}

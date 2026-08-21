@@ -36,6 +36,7 @@ from frontier_engine.runtimes import probe_lm_studio_library, probe_ollama, stre
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer, execute_s3_signed_transfer
+from frontier_engine.rag import HybridIndex
 from frontier_engine.s3_signing import S3Credentials
 from frontier_engine.scientific_registry import connector_catalog, extension_catalog, skill_catalog
 from frontier_engine.compute import ComputePlan, run_remote
@@ -509,6 +510,34 @@ def provider_chat(kind: str, base_url: str, model: str, prompt: str, approved: b
     provider, _ = configured_provider(kind, base_url, api_key_env)
     output = "".join(provider.stream_chat(model, [{"role": "user", "content": prompt}], egress_approved=True))
     return {"output": output, "egress": preview}
+
+
+def rag_ingest(root: Path, source_uri: str, source_label: str, content: str) -> dict[str, object]:
+    index = HybridIndex(root / "rag.sqlite3")
+    try:
+        chunks = index.ingest(source_uri, source_label, content)
+        return {"source_uri": source_uri, "chunks": len(chunks), "retrieval_mode": index.retrieval_mode}
+    finally:
+        index.close()
+
+
+def rag_search(root: Path, query: str, limit: int = 5) -> dict[str, object]:
+    index = HybridIndex(root / "rag.sqlite3")
+    try:
+        return {"retrieval_mode": index.retrieval_mode, "citations": [citation.__dict__ for citation in index.search(query, limit)]}
+    finally:
+        index.close()
+
+
+def rag_evaluate(root: Path, cases_json: str, limit: int = 5) -> dict[str, object]:
+    cases = json.loads(cases_json)
+    if not isinstance(cases, list) or not all(isinstance(case, dict) and isinstance(case.get("query"), str) and isinstance(case.get("expected_sources"), list) for case in cases):
+        raise ValueError("FR-RAG-EVALUATION-CASES")
+    index = HybridIndex(root / "rag.sqlite3")
+    try:
+        return index.evaluate(((case["query"], set(case["expected_sources"])) for case in cases), limit)
+    finally:
+        index.close()
 
 
 def install_shoko_gguf_runtime(root: Path) -> dict[str, object]:
@@ -1043,7 +1072,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "rag-ingest", "rag-search", "rag-evaluate", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1113,6 +1142,9 @@ def main() -> None:
     parser.add_argument("--provider-base-url")
     parser.add_argument("--api-key-env")
     parser.add_argument("--provider-approved", action="store_true")
+    parser.add_argument("--source-uri")
+    parser.add_argument("--source-label")
+    parser.add_argument("--cases-json")
     parser.add_argument("--profile-model", action="append")
     parser.add_argument("--context-length", type=int)
     parser.add_argument("--cpu-threads", type=int)
@@ -1408,6 +1440,18 @@ def main() -> None:
         if args.provider_kind is None or args.provider_base_url is None or args.model is None or args.prompt is None:
             parser.error("provider-chat requires --provider-kind, --provider-base-url, --model, and --prompt")
         result = provider_chat(args.provider_kind, args.provider_base_url, args.model, args.prompt, args.provider_approved, args.api_key_env)
+    elif args.command == "rag-ingest":
+        if args.source_uri is None or args.source_label is None:
+            parser.error("rag-ingest requires --source-uri and --source-label")
+        result = rag_ingest(root, args.source_uri, args.source_label, args.content)
+    elif args.command == "rag-search":
+        if args.query is None:
+            parser.error("rag-search requires --query")
+        result = rag_search(root, args.query, args.limit)
+    elif args.command == "rag-evaluate":
+        if args.cases_json is None:
+            parser.error("rag-evaluate requires --cases-json")
+        result = rag_evaluate(root, args.cases_json, args.limit)
     elif args.command == "reference-lmstudio-model":
         if args.path is None:
             parser.error("reference-lmstudio-model requires --path")
