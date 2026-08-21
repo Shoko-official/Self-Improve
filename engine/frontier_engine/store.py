@@ -55,6 +55,7 @@ class FrontierStore:
                 parent_session_id TEXT REFERENCES sessions(id),
                 reasoning_effort TEXT NOT NULL,
                 starred INTEGER NOT NULL DEFAULT 0,
+                archived_at TEXT,
                 created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS project_folder_grants (
@@ -133,6 +134,9 @@ class FrontierStore:
         columns = {row["name"] for row in self.connection.execute("PRAGMA table_info(jobs)")}
         if "parent_job_id" not in columns:
             self.connection.execute("ALTER TABLE jobs ADD COLUMN parent_job_id TEXT REFERENCES jobs(id)")
+        session_columns = {row["name"] for row in self.connection.execute("PRAGMA table_info(sessions)")}
+        if "archived_at" not in session_columns:
+            self.connection.execute("ALTER TABLE sessions ADD COLUMN archived_at TEXT")
         self.connection.commit()
 
     def create_project(self, name: str, instructions: str = "") -> str:
@@ -254,7 +258,7 @@ class FrontierStore:
 
     def set_session_starred(self, session_id: str, starred: bool) -> None:
         result = self.connection.execute(
-            "UPDATE sessions SET starred = ? WHERE id = ?", (int(starred), session_id)
+            "UPDATE sessions SET starred = ? WHERE id = ? AND archived_at IS NULL", (int(starred), session_id)
         )
         if result.rowcount != 1:
             raise KeyError(f"Session not found: {session_id}")
@@ -263,23 +267,43 @@ class FrontierStore:
     def set_session_reasoning_effort(self, session_id: str, reasoning_effort: str) -> None:
         self._require_reasoning_effort(reasoning_effort)
         result = self.connection.execute(
-            "UPDATE sessions SET reasoning_effort = ? WHERE id = ?", (reasoning_effort, session_id)
+            "UPDATE sessions SET reasoning_effort = ? WHERE id = ? AND archived_at IS NULL", (reasoning_effort, session_id)
         )
         if result.rowcount != 1:
             raise KeyError(f"Session not found: {session_id}")
+        self.connection.commit()
+
+    def archive_session(self, session_id: str) -> None:
+        row = self.connection.execute("SELECT project_id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"Session not found: {session_id}")
+        self._require_active_project(str(row["project_id"]))
+        result = self.connection.execute("UPDATE sessions SET archived_at = ? WHERE id = ? AND archived_at IS NULL", (_utc_now(), session_id))
+        if result.rowcount != 1:
+            raise KeyError(f"Active session not found: {session_id}")
+        self.connection.commit()
+
+    def restore_session(self, session_id: str) -> None:
+        row = self.connection.execute("SELECT project_id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"Session not found: {session_id}")
+        self._require_active_project(str(row["project_id"]))
+        result = self.connection.execute("UPDATE sessions SET archived_at = NULL WHERE id = ? AND archived_at IS NOT NULL", (session_id,))
+        if result.rowcount != 1:
+            raise KeyError(f"Archived session not found: {session_id}")
         self.connection.commit()
 
     def search_sessions(self, query: str, project_id: str | None = None) -> list[dict[str, object]]:
         query = query.strip()
         if not query:
             raise ValueError("Session search query is required.")
-        conditions = ["instr(lower(s.title), lower(?)) > 0"]
+        conditions = ["instr(lower(s.title), lower(?)) > 0", "s.archived_at IS NULL"]
         parameters: list[object] = [query]
         if project_id is not None:
             conditions.append("s.project_id = ?")
             parameters.append(project_id)
         rows = self.connection.execute(
-            f"""SELECT s.id, s.project_id, p.name AS project_name, s.title, s.parent_session_id, s.reasoning_effort, s.starred, s.created_at
+            f"""SELECT s.id, s.project_id, p.name AS project_name, s.title, s.parent_session_id, s.reasoning_effort, s.starred, s.archived_at, s.created_at
                 FROM sessions s JOIN projects p ON p.id = s.project_id WHERE {' AND '.join(conditions)}
                 ORDER BY s.created_at DESC, s.id DESC""",
             parameters,
