@@ -6,7 +6,7 @@ import { ChatSurface, primaryNavigation, resolveProjectId, secondaryNavigation }
 describe("workspace navigation", () => {
   it("keeps the core workflows primary and exposes operational surfaces through tools", () => {
     expect(primaryNavigation.map(item => item.id)).toEqual(["chat", "workspaces", "models", "science"]);
-    expect(secondaryNavigation.map(item => item.id)).toEqual(["artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "kernel"]);
+    expect(secondaryNavigation.map(item => item.id)).toEqual(["images", "artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "kernel"]);
   });
 });
 
