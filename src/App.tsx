@@ -481,9 +481,9 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
     }
   }
 
-  async function manageTodo(todoId: string, operation: string) {
+  async function manageTodo(todoId: string, operation: string, todoText?: string) {
     if (!projectId) return;
-    await invoke("local_agent_activity_development", { projectId, todoId, operation });
+    await invoke("local_agent_activity_development", { projectId, todoId, operation, todoText });
     await refreshActivity(projectId);
   }
 
