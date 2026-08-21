@@ -8,11 +8,21 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import acknowledge_notification, agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, manage_goal, manage_todo, pending_notifications, plan_huggingface_model_download, project_folders, project_git_context, projects, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
+from frontier_engine.cli import acknowledge_notification, agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, manage_goal, manage_todo, pending_notifications, plan_huggingface_model_download, project_folders, project_git_context, projects, provider_health, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
 class CliTests(unittest.TestCase):
+    def test_provider_health_uses_only_a_named_environment_credential(self) -> None:
+        with patch("frontier_engine.cli.OpenAICompatibleProvider") as provider_type, patch.dict(os.environ, {"FRONTIER_PROVIDER_KEY": "secret"}, clear=False):
+            provider_type.return_value.health.return_value = {"provider": "OpenAI-compatible", "healthy": True, "models": ["model-a"]}
+            result = provider_health("openai-compatible", "https://provider.example", "FRONTIER_PROVIDER_KEY")
+        self.assertTrue(result["credential_configured"])
+        self.assertEqual(result["credential_handle"], "FRONTIER_PROVIDER_KEY")
+        self.assertNotIn("secret", str(result))
+        with self.assertRaisesRegex(ValueError, "FR-PROVIDER-HTTPS"):
+            provider_health("openai-compatible", "http://provider.example")
+
     def test_status_initializes_an_empty_local_store(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             result = status(Path(temp_dir))
