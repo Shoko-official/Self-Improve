@@ -448,7 +448,19 @@ def install_ollama_model(root: Path, project_id: str, model: str) -> dict[str, o
 
 
 def local_model_catalog(root: Path | None = None) -> dict[str, object]:
-    return {"shoko_gguf": probe_managed_gguf(root or data_root()), "ollama": probe_ollama(), "lm_studio_library": probe_lm_studio_library()}
+    resolved_root = root or data_root()
+    resolved_root.mkdir(parents=True, exist_ok=True)
+    registry = ModelRegistry(resolved_root / "models.sqlite3")
+    try:
+        registered_models = registry.list()
+    finally:
+        registry.close()
+    return {
+        "shoko_gguf": probe_managed_gguf(resolved_root),
+        "ollama": probe_ollama(),
+        "lm_studio_library": probe_lm_studio_library(),
+        "registered_models": registered_models,
+    }
 
 
 def install_shoko_gguf_runtime(root: Path) -> dict[str, object]:

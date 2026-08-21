@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ModelsSurface } from "./ModelsSurface";
+import { ModelsSurface, selectedLocalModelKey } from "./ModelsSurface";
 import { AutomationsSurface } from "./AutomationsSurface";
 import { ScientificFigureView, type ScientificFigureData } from "./ScientificFigure";
 import {
@@ -58,7 +58,7 @@ type ArtifactPreview = { artifact_version_id: string; renderer_id: string; rende
 type ArtifactVersion = { id: string; version: number; content_hash: string; execution_log: Record<string, string> };
 type EnvironmentRecord = { name: string; language: string; executable: string | null; python_version: string | null; runtime_version?: string | null; package_fingerprint: string | null; packages: Record<string, string>; };
 type AgentActivity = { project_id: string; plan: string | null; plan_state: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string }; result: { error?: string; output_chars?: number } }>; };
-type LocalModelCatalog = { shoko_gguf: { available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean }; ollama: { available: boolean; models: string[]; reason?: string }; lm_studio_library: { available: boolean; models_root: string; models: Array<{ key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string }> } };
+type LocalModelCatalog = { shoko_gguf: { available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean }; ollama: { available: boolean; models: string[]; reason?: string }; lm_studio_library: { available: boolean; models_root: string; models: Array<{ key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string }> }; registered_models: Array<{ path: string; capability_state: string }> };
 type KernelResult = { project_id: string; execution: { state: string; stdout: string; stderr: string; error?: string }; job: { id: string; state: string; diagnostic: { code: string } | null; events: Array<{ kind: string; created_at: string }> } };
 type FolderGrant = { id: string; path: string; operation: string; revoked_at: string | null };
 type GitContext = { linked: boolean; repository?: boolean; path?: string; branch?: string; changes?: number; status?: string[]; remote?: string | null; reason?: string; ci?: { available: boolean; latest?: { status: string; conclusion: string; name: string; url: string; updatedAt: string } | null; reason?: string } };
@@ -421,7 +421,9 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
     void invoke<LocalModelCatalog>("local_model_catalog_development")
       .then(result => {
         setCatalog(result);
-        setModel(current => current || (result.shoko_gguf.available && result.lm_studio_library.models[0] ? `gguf:${result.lm_studio_library.models[0].path}` : result.ollama.models[0] || ""));
+        const savedModel = localStorage.getItem(selectedLocalModelKey);
+        const savedModelAvailable = result.shoko_gguf.available && savedModel?.startsWith("gguf:") && result.lm_studio_library.models.some(item => `gguf:${item.path}` === savedModel);
+        setModel(current => current || (savedModelAvailable && savedModel ? savedModel : result.shoko_gguf.available && result.lm_studio_library.models[0] ? `gguf:${result.lm_studio_library.models[0].path}` : result.ollama.models[0] || ""));
       })
       .catch(() => setCatalog(null));
   }, []);

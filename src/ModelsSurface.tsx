@@ -60,6 +60,14 @@ type WarmupResult = {
 type LibraryModel = { key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string };
 type LmStudioLibrary = { source: string; available: boolean; reason: string | null; models_root: string; models: LibraryModel[] };
 type ManagedRuntime = { runtime: string; available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean };
+type RegisteredModel = { path: string; capability_state: string };
+type LocalModelCatalog = { shoko_gguf: ManagedRuntime; lm_studio_library: LmStudioLibrary; registered_models: RegisteredModel[] };
+
+export const selectedLocalModelKey = "frontier-selected-local-model";
+
+export function registeredExternalModelPaths(models: RegisteredModel[]): Set<string> {
+  return new Set(models.filter(model => model.capability_state === "external-reference").map(model => model.path));
+}
 
 type ModelsSurfaceProps = {
   report: CapabilityReport | null;
@@ -145,8 +153,12 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
   }, [activeProjects, projectId]);
 
   useEffect(() => {
-    void invoke<{ shoko_gguf: ManagedRuntime; lm_studio_library: LmStudioLibrary }>("local_model_catalog_development")
-      .then(result => { setLmStudioLibrary(result.lm_studio_library); setManagedRuntime(result.shoko_gguf); })
+    void invoke<LocalModelCatalog>("local_model_catalog_development")
+      .then(result => {
+        setLmStudioLibrary(result.lm_studio_library);
+        setManagedRuntime(result.shoko_gguf);
+        setReferencedPaths(registeredExternalModelPaths(result.registered_models));
+      })
       .catch(() => { setLmStudioLibrary(null); setManagedRuntime(null); });
   }, []);
 
@@ -300,6 +312,7 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
     try {
       await invoke("reference_lm_studio_model_development", { path });
       setReferencedPaths(current => new Set(current).add(path));
+      localStorage.setItem(selectedLocalModelKey, `gguf:${path}`);
     } catch (reason) {
       setModelError(message(reason, language === "fr" ? "Le modèle n'a pas pu être référencé." : "The model could not be referenced."));
     } finally {
@@ -342,7 +355,7 @@ export function ModelsSurface({ report, error, probe, engineReport, engineError,
               const referenced = referencedPaths.has(model.path);
               return <div className="model-library-row" key={model.path}>
                 <div><strong>{model.display_name}</strong><span>{formatBytes(model.size_bytes, language)} · {model.key}</span></div>
-                <button className="minor-action" type="button" disabled={!managedRuntime?.available || referenced || referencingPath === model.path} onClick={() => void referenceLibraryModel(model.path)}><Link2 size={13} />{referenced ? (language === "fr" ? "Prêt" : "Ready") : referencingPath === model.path ? (language === "fr" ? "Connexion" : "Connecting") : (language === "fr" ? "Utiliser dans Shoko" : "Use in Shoko")}</button>
+                <button className="minor-action" type="button" disabled={!managedRuntime?.available || referenced || referencingPath === model.path} onClick={() => void referenceLibraryModel(model.path)}><Link2 size={13} />{referenced ? (language === "fr" ? "Prêt dans Discussion" : "Ready in Chat") : referencingPath === model.path ? (language === "fr" ? "Connexion" : "Connecting") : (language === "fr" ? "Utiliser dans Shoko" : "Use in Shoko")}</button>
               </div>;
             })}
           </div>
