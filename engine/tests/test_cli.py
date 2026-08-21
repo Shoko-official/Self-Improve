@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, plan_huggingface_model_download, project_folders, project_git_context, projects, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
+from frontier_engine.cli import agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, manage_goal, manage_todo, plan_huggingface_model_download, project_folders, project_git_context, projects, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -237,6 +237,16 @@ class CliTests(unittest.TestCase):
             archive_project(root, project_id)
             with self.assertRaisesRegex(Exception, "(?i)project"):
                 agent_activity(root, project_id)
+
+    def test_agent_activity_manages_goal_and_todo_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); project_id = create_project(root, "Agent") ["id"]
+            from frontier_engine.agent_state import AgentStateStore
+            state = AgentStateStore(root / "agent.sqlite3"); state.set_plan(project_id, "Draft protocol"); todo_id = state.add_todo(project_id, "Read source"); state.close()
+            self.assertEqual(manage_goal(root, project_id, "goal-paused")["plan_state"], "paused")
+            self.assertEqual(manage_goal(root, project_id, "goal-update", "Review protocol")["plan"], "Review protocol")
+            self.assertEqual(manage_todo(root, project_id, todo_id, "update", "Review source")["todos"][0]["text"], "Review source")
+            self.assertIsNone(manage_goal(root, project_id, "goal-delete")["plan"])
 
     def test_artifacts_keep_versions_and_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

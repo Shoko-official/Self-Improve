@@ -699,9 +699,32 @@ def agent_activity(root: Path, project_id: str) -> dict[str, object]:
         return {
             "project_id": project_id,
             "plan": state.plan(project_id),
+            "plan_state": state.plan_state(project_id),
             "todos": [todo.__dict__ for todo in state.todos(project_id)],
             "tool_calls": tool_calls,
         }
+    finally: state.close()
+
+def manage_todo(root: Path, project_id: str, todo_id: str, action: str, text: str | None = None) -> dict[str, object]:
+    state = AgentStateStore(root / "agent.sqlite3")
+    try:
+        if action == "update":
+            if text is None: raise ValueError("FR-TODO-TEXT-REQUIRED")
+            state.update_todo(todo_id, text)
+        elif action == "delete": state.delete_todo(todo_id)
+        else: state.transition_todo(todo_id, action)
+        return {"todos": [todo.__dict__ for todo in state.todos(project_id)]}
+    finally: state.close()
+
+def manage_goal(root: Path, project_id: str, action: str, text: str | None = None) -> dict[str, object]:
+    state = AgentStateStore(root / "agent.sqlite3")
+    try:
+        if action == "goal-update":
+            if text is None: raise ValueError("FR-GOAL-TEXT-REQUIRED")
+            state.set_plan(project_id, text)
+        elif action == "goal-delete": state.delete_plan(project_id)
+        else: state.transition_plan(project_id, action.removeprefix("goal-"))
+        return {"plan": state.plan(project_id), "plan_state": state.plan_state(project_id)}
     finally: state.close()
 
 
@@ -926,6 +949,8 @@ def main() -> None:
     parser.add_argument("--work-mode", choices=("chat", "plan", "science"), default="chat")
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
+    parser.add_argument("--todo-id")
+    parser.add_argument("--todo-text")
     parser.add_argument("--working-directory", type=Path)
     parser.add_argument("--workspace", type=Path)
     parser.add_argument("--workspace-action", choices=("list", "read", "write"))
@@ -1176,7 +1201,15 @@ def main() -> None:
     elif args.command == "agent-activity":
         if args.project_id is None:
             parser.error("agent-activity requires --project-id")
-        result = agent_activity(root, args.project_id)
+        if args.operation is not None:
+            if args.operation.startswith("goal-"):
+                result = manage_goal(root, args.project_id, args.operation, args.todo_text)
+            elif args.todo_id is None:
+                parser.error("agent-activity todo operation requires --todo-id")
+            else:
+                result = manage_todo(root, args.project_id, args.todo_id, args.operation, args.todo_text)
+        else:
+            result = agent_activity(root, args.project_id)
     elif args.command == "generations":
         result = generations(root, args.project_id, args.generation_id)
     elif args.command == "generate-local":
