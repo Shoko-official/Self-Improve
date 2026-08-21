@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 from zipfile import ZipFile
 
-from frontier_engine.cli import acknowledge_notification, agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, manage_goal, manage_todo, pending_notifications, plan_huggingface_model_download, project_folders, project_git_context, projects, provider_health, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
+from frontier_engine.cli import acknowledge_notification, agent_activity, annotations, archive_project, artifact_versions, artifacts, cancel_job, claims, consume_annotations, create_annotation, create_artifact, create_claim, create_project, create_session, data_root, download_huggingface_model, enqueue_job, execute_shell, export_data, generate_local, generations, grant_project_folder, huggingface_model_transfer, import_data, install_ollama_model, jobs, local_model_catalog, manage_goal, manage_todo, pending_notifications, plan_huggingface_model_download, project_folders, project_git_context, projects, provider_chat, provider_egress_preview, provider_health, reference_lm_studio_model, retry_huggingface_model_transfer, retry_job, review_scientific_claims, revoke_project_folder, run_agent, search_artifacts, search_huggingface_models, search_sessions, sessions, set_claim_status, set_project_instructions, set_session_reasoning_effort, set_session_starred, start_huggingface_model_transfer, status, workspace_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -22,6 +22,17 @@ class CliTests(unittest.TestCase):
         self.assertNotIn("secret", str(result))
         with self.assertRaisesRegex(ValueError, "FR-PROVIDER-HTTPS"):
             provider_health("openai-compatible", "http://provider.example")
+
+    def test_provider_chat_requires_explicit_approval_and_returns_a_safe_preview(self) -> None:
+        preview = provider_egress_preview("openai-compatible", "https://provider.example", "private prompt")
+        self.assertEqual(preview["endpoint"], "https://provider.example/v1/chat/completions")
+        self.assertEqual(preview["text_bytes"], len("private prompt".encode()))
+        with self.assertRaisesRegex(PermissionError, "FR-PROVIDER-EGRESS"):
+            provider_chat("openai-compatible", "https://provider.example", "model-a", "private prompt", False)
+        with patch("frontier_engine.cli.OpenAICompatibleProvider") as provider_type:
+            provider_type.return_value.stream_chat.return_value = iter(("hello", " world"))
+            result = provider_chat("openai-compatible", "https://provider.example", "model-a", "private prompt", True)
+        self.assertEqual(result["output"], "hello world")
 
     def test_status_initializes_an_empty_local_store(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

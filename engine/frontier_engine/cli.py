@@ -465,6 +465,16 @@ def local_model_catalog(root: Path | None = None) -> dict[str, object]:
 
 
 def provider_health(kind: str, base_url: str, api_key_env: str | None = None) -> dict[str, object]:
+    provider, credential_configured = configured_provider(kind, base_url, api_key_env)
+    return {
+        **provider.health(),
+        "kind": kind,
+        "credential_configured": credential_configured,
+        "credential_handle": api_key_env,
+    }
+
+
+def configured_provider(kind: str, base_url: str, api_key_env: str | None = None) -> tuple[OpenAICompatibleProvider, bool]:
     if kind not in {"openai-compatible", "nvidia-nim"}:
         raise ValueError("FR-PROVIDER-KIND")
     if not base_url.startswith("https://"):
@@ -473,7 +483,32 @@ def provider_health(kind: str, base_url: str, api_key_env: str | None = None) ->
         raise ValueError("FR-PROVIDER-CREDENTIAL-HANDLE")
     api_key = os.environ.get(api_key_env) if api_key_env else None
     provider = NvidiaNimProvider(base_url, api_key) if kind == "nvidia-nim" else OpenAICompatibleProvider(ProviderConfig("OpenAI-compatible", base_url, api_key))
-    return {**provider.health(), "kind": kind, "credential_configured": bool(api_key_env and api_key), "credential_handle": api_key_env}
+    return provider, bool(api_key_env and api_key)
+
+
+def provider_egress_preview(kind: str, base_url: str, prompt: str, api_key_env: str | None = None) -> dict[str, object]:
+    if not prompt.strip():
+        raise ValueError("FR-PROVIDER-PROMPT")
+    provider, _ = configured_provider(kind, base_url, api_key_env)
+    preview = provider.preview_egress([{"role": "user", "content": prompt}])
+    return {
+        "provider": preview.provider,
+        "endpoint": preview.endpoint,
+        "text_bytes": preview.text_bytes,
+        "attachment_names": list(preview.attachment_names),
+        "attachment_bytes": preview.attachment_bytes,
+    }
+
+
+def provider_chat(kind: str, base_url: str, model: str, prompt: str, approved: bool, api_key_env: str | None = None) -> dict[str, object]:
+    if not model.strip():
+        raise ValueError("FR-PROVIDER-MODEL")
+    preview = provider_egress_preview(kind, base_url, prompt, api_key_env)
+    if not approved:
+        raise PermissionError("FR-PROVIDER-EGRESS: explicit approval required")
+    provider, _ = configured_provider(kind, base_url, api_key_env)
+    output = "".join(provider.stream_chat(model, [{"role": "user", "content": prompt}], egress_approved=True))
+    return {"output": output, "egress": preview}
 
 
 def install_shoko_gguf_runtime(root: Path) -> dict[str, object]:
@@ -1008,7 +1043,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1077,6 +1112,7 @@ def main() -> None:
     parser.add_argument("--provider-kind")
     parser.add_argument("--provider-base-url")
     parser.add_argument("--api-key-env")
+    parser.add_argument("--provider-approved", action="store_true")
     parser.add_argument("--profile-model", action="append")
     parser.add_argument("--context-length", type=int)
     parser.add_argument("--cpu-threads", type=int)
@@ -1364,6 +1400,14 @@ def main() -> None:
         if args.provider_kind is None or args.provider_base_url is None:
             parser.error("provider-health requires --provider-kind and --provider-base-url")
         result = provider_health(args.provider_kind, args.provider_base_url, args.api_key_env)
+    elif args.command == "provider-egress-preview":
+        if args.provider_kind is None or args.provider_base_url is None or args.prompt is None:
+            parser.error("provider-egress-preview requires --provider-kind, --provider-base-url, and --prompt")
+        result = provider_egress_preview(args.provider_kind, args.provider_base_url, args.prompt, args.api_key_env)
+    elif args.command == "provider-chat":
+        if args.provider_kind is None or args.provider_base_url is None or args.model is None or args.prompt is None:
+            parser.error("provider-chat requires --provider-kind, --provider-base-url, --model, and --prompt")
+        result = provider_chat(args.provider_kind, args.provider_base_url, args.model, args.prompt, args.provider_approved, args.api_key_env)
     elif args.command == "reference-lmstudio-model":
         if args.path is None:
             parser.error("reference-lmstudio-model requires --path")

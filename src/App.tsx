@@ -301,7 +301,7 @@ export function App() {
             {surface === "extensions" && <RegistrySurface kind="extensions" language={language} projects={projectRecords} />}
             {surface === "compute" && <ComputeSurface language={language} />}
             {surface === "kernel" && <KernelSurface projects={projectRecords} />}
-            {surface === "settings" && <><SettingsSurface language={language} /><ProviderSettings language={language} /></>}
+            {surface === "settings" && <><SettingsSurface language={language} /><ProviderSettings language={language} /><ProviderEgress language={language} /></>}
           </section>
 
           {showInspector && (
@@ -1258,6 +1258,34 @@ function ProviderSettings({ language }: { language: Language }) {
     finally { setChecking(false); }
   }
   return <section className="surface"><div className="surface-mark">REMOTE BOUNDARY</div><h2>{language === "fr" ? "Fournisseur distant" : "Remote provider"}</h2><p>{language === "fr" ? "Le test contacte uniquement l’endpoint de modèles. La clé reste dans la variable d’environnement indiquée et n’est jamais enregistrée par Shoko’s LLM." : "The check contacts only the models endpoint. The key remains in the named environment variable and is never stored by Shoko's LLM."}</p><form className="project-form" onSubmit={event => void check(event)}><label htmlFor="provider-kind">{language === "fr" ? "Type de fournisseur" : "Provider type"}</label><select id="provider-kind" value={kind} onChange={event => setKind(event.target.value as typeof kind)}><option value="openai-compatible">OpenAI-compatible</option><option value="nvidia-nim">NVIDIA NIM</option></select><label htmlFor="provider-url">HTTPS endpoint</label><input id="provider-url" type="url" value={baseUrl} onChange={event => setBaseUrl(event.target.value)} placeholder={kind === "nvidia-nim" ? "https://integrate.api.nvidia.com" : "https://provider.example"} required /><label htmlFor="provider-credential">{language === "fr" ? "Variable d’environnement de clé, facultative" : "API key environment variable, optional"}</label><input id="provider-credential" value={credentialHandle} onChange={event => setCredentialHandle(event.target.value)} placeholder="FRONTIER_PROVIDER_KEY" pattern="[A-Za-z][A-Za-z0-9_]*" /><button className="action" type="submit" disabled={checking}>{checking ? (language === "fr" ? "Vérification" : "Checking") : (language === "fr" ? "Vérifier le fournisseur" : "Check provider")}</button></form>{error && <p className="agent-error">{error}</p>}{result && <Evidence rows={[`${result.provider}: ${result.healthy ? (language === "fr" ? "sain" : "healthy") : (language === "fr" ? "indisponible" : "unavailable")}`, `${result.models.length} ${language === "fr" ? "modèle(s) détecté(s)" : "model(s) detected"}`, result.credential_configured ? (language === "fr" ? `Clé lue depuis ${result.credential_handle}` : `Key read from ${result.credential_handle}`) : (language === "fr" ? "Aucune clé configurée" : "No key configured")]}/>}</section>;
+}
+
+function ProviderEgress({ language }: { language: Language }) {
+  const [kind, setKind] = useState<"openai-compatible" | "nvidia-nim">("openai-compatible");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [credentialHandle, setCredentialHandle] = useState("");
+  const [model, setModel] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [preview, setPreview] = useState<{ provider: string; endpoint: string; text_bytes: number; attachment_bytes: number } | null>(null);
+  const [approved, setApproved] = useState(false);
+  const [output, setOutput] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  function resetPreview() { setPreview(null); setApproved(false); setOutput(null); }
+  async function inspect(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError(null); setOutput(null); setApproved(false);
+    try { setPreview(await invoke("provider_egress_preview_development", { providerKind: kind, providerBaseUrl: baseUrl, prompt, apiKeyEnv: credentialHandle.trim() || null })); }
+    catch (reason) { setPreview(null); setError(reason instanceof Error ? reason.message : "FR-PROVIDER-PREVIEW-FAILED"); }
+    finally { setBusy(false); }
+  }
+  async function send() {
+    if (!preview || !approved) return;
+    setBusy(true); setError(null);
+    try { const result = await invoke<{ output: string }>("provider_chat_development", { providerKind: kind, providerBaseUrl: baseUrl, model, prompt, apiKeyEnv: credentialHandle.trim() || null, approved: true }); setOutput(result.output); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "FR-PROVIDER-CHAT-FAILED"); }
+    finally { setBusy(false); }
+  }
+  return <section className="surface"><div className="surface-mark">EXPLICIT EGRESS</div><h2>{language === "fr" ? "Essai de chat distant" : "Remote chat trial"}</h2><p>{language === "fr" ? "Prévisualisez le contenu sortant, puis confirmez une fois. Aucun envoi ne démarre avant votre accord." : "Preview outbound content, then confirm once. Nothing is sent before your approval."}</p><form className="project-form" onSubmit={event => void inspect(event)}><label>HTTPS endpoint<input type="url" value={baseUrl} onChange={event => { setBaseUrl(event.target.value); resetPreview(); }} placeholder="https://provider.example" required /></label><label>{language === "fr" ? "Type" : "Provider"}<select value={kind} onChange={event => { setKind(event.target.value as typeof kind); resetPreview(); }}><option value="openai-compatible">OpenAI-compatible</option><option value="nvidia-nim">NVIDIA NIM</option></select></label><label>{language === "fr" ? "Variable de clé" : "Key environment variable"}<input value={credentialHandle} onChange={event => { setCredentialHandle(event.target.value); resetPreview(); }} placeholder="FRONTIER_PROVIDER_KEY" pattern="[A-Za-z][A-Za-z0-9_]*" /></label><label>{language === "fr" ? "Modèle distant" : "Remote model"}<input value={model} onChange={event => { setModel(event.target.value); resetPreview(); }} required /></label><label>{language === "fr" ? "Message" : "Message"}<textarea value={prompt} onChange={event => { setPrompt(event.target.value); resetPreview(); }} rows={4} required /></label><button className="action" type="submit" disabled={busy}>{language === "fr" ? "Prévisualiser l'envoi" : "Preview egress"}</button></form>{preview && <div className="activity-ledger"><div className="activity-heading"><ShieldCheck size={16} /><h3>{language === "fr" ? "Autorisation requise" : "Approval required"}</h3></div><p>{preview.provider}<br />{preview.endpoint}<br />{preview.text_bytes} {language === "fr" ? "octets de texte, aucune pièce jointe" : "text bytes, no attachments"}</p><label className="workspace-row"><input type="checkbox" checked={approved} onChange={event => setApproved(event.target.checked)} />{language === "fr" ? "J'autorise cet envoi unique vers cet endpoint." : "I approve this one request to this endpoint."}</label><button className="action" type="button" onClick={() => void send()} disabled={busy || !approved}>{busy ? (language === "fr" ? "Envoi" : "Sending") : (language === "fr" ? "Envoyer au fournisseur" : "Send to provider")}</button></div>}{error && <p className="agent-error">{error}</p>}{output !== null && <article className="chat-message assistant-message"><div className="assistant-heading"><Bot size={15} /><span>Shoko's LLM</span></div><MarkdownContent content={output} /></article>}</section>;
 }
 function Surface({ mark, title, text, rows }: { mark: string; title: string; text: string; rows: string[] }) { return <section className="surface"><div className="surface-mark">{mark}</div><h2>{title}</h2><p>{text}</p><Evidence rows={rows} /></section>; }
 function Evidence({ rows }: { rows: string[] }) { return <ul className="evidence">{rows.map(row => <li key={row}><span>verified state</span>{row}</li>)}</ul>; }
