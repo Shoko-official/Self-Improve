@@ -532,6 +532,8 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
 
       {activity && activity.todos.length > 0 && <section className="activity-ledger"><div className="activity-heading"><ListTodo size={16} /><h3>{language === "fr" ? "Gérer les todos" : "Manage todos"}</h3></div>{activity.todos.map(todo => <div className="workspace-row" key={todo.id}><span>{todo.state}: {todo.text}</span><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, todo.state === "paused" ? "pending" : "paused")}>{todo.state === "paused" ? (language === "fr" ? "Reprendre" : "Resume") : (language === "fr" ? "Pause" : "Pause")}</button><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, "completed")}>{language === "fr" ? "Terminer" : "Complete"}</button><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, "delete")}>{language === "fr" ? "Supprimer" : "Delete"}</button></div>)}</section>}
 
+      {activity && activity.todos.length > 0 && <div className="todo-edit-list">{activity.todos.map(todo => <button key={`edit-${todo.id}`} className="minor-action" type="button" onClick={() => { const next = window.prompt(language === "fr" ? "Modifier le todo" : "Edit todo", todo.text); if (next !== null) void manageTodo(todo.id, "update", next); }}>{language === "fr" ? `Modifier: ${todo.text}` : `Edit: ${todo.text}`}</button>)}</div>}
+
       <form className="chat-composer" onSubmit={event => void submit(event)}>
         {palette === "commands" && (
           <div className="command-palette" role="listbox" aria-label={language === "fr" ? "Commandes slash" : "Slash commands"}>
