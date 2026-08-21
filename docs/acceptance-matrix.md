@@ -3,7 +3,7 @@
 | Area | Status | Evidence |
 | --- | --- | --- |
 | Desktop launch | verified | `pnpm tauri dev` compiled `target\\debug\\frontier.exe` through the Visual Studio developer environment and launched it on 2026-08-15 |
-| French and English UI | partially_verified | The global language selector persists the chosen locale and the tested resolver covers navigation plus complete Workspaces, Reviewer, and Annotations surfaces; Models, Science, Artifacts, Compute, Agent, Kernel, and Settings form copy remains to be migrated |
+| French and English UI | partially_verified | The global language selector persists the chosen locale and the tested resolver covers navigation plus complete Workspaces, Reviewer, Annotations, Artifacts, Compute, and Settings surfaces; Models, Science, Agent, and Kernel form copy remains to be migrated |
 | Engine protocol | partially_verified | Source and frozen `frontier-engine` doctor paths return protocol version 1; packaged Rust verifies the managed sidecar platform, architecture, path, and SHA-256 before engine and kernel spawns, with no host-Python fallback; native boundary smoke is automated while full installed UI E2E remains pending |
 | Local control plane | partially_verified | `frontierctl serve` starts an authenticated ephemeral-bearer status endpoint bound to `127.0.0.1`; background start, URL/status/log inspection, and bounded stop are covered by `engine/tests/test_cli.py`; tunnels and updates remain unimplemented |
 | Hardware probe | partially_verified | Static OS, architecture, and core probe implemented |
