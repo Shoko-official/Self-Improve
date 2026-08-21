@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ArtifactPreviewPanel, MarkdownContent, mcpMarkdown } from "./App";
+import { AnnotationSurface, ArtifactPreviewPanel, ArtifactsSurface, MarkdownContent, mcpMarkdown } from "./App";
 
 describe("MarkdownContent", () => {
   it("renders GitHub-flavored Markdown structures", () => {
@@ -36,6 +36,18 @@ describe("ArtifactPreviewPanel", () => {
     expect(html).toContain('type="checkbox"');
     expect(html).toContain("&lt;script&gt;blocked&lt;/script&gt;");
     expect(html).not.toContain("<p>fallback</p>");
+  });
+});
+
+describe("artifact workflow localization", () => {
+  it("renders French artifact and annotation controls", () => {
+    const artifacts = renderToStaticMarkup(<ArtifactsSurface language="fr" />);
+    const annotations = renderToStaticMarkup(<AnnotationSurface language="fr" />);
+
+    expect(artifacts).toContain("Registre des artefacts");
+    expect(artifacts).toContain("Enregistrer l&#x27;artefact");
+    expect(annotations).toContain("ANNOTATIONS VERSIONNÉES");
+    expect(annotations).toContain("Région PDF");
   });
 });
 
