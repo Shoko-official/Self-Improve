@@ -18,6 +18,16 @@ class RendererTests(unittest.TestCase):
         self.assertIn('data-row-index="1"', result["html"])
         self.assertIn('data-column-index="1"', result["html"])
 
+    def test_html_report_is_structural_and_inert(self) -> None:
+        result = render_preview("text/html", '<h1>QC report</h1><p onclick="bad()">Ready <strong>now</strong></p><script>alert(1)</script><img src="https://example.test/x.png">')
+        self.assertEqual(result["renderer_id"], "html.structural")
+        self.assertIn("<h1>QC report</h1>", result["html"])
+        self.assertIn("<strong>now</strong>", result["html"])
+        self.assertNotIn("onclick", result["html"])
+        self.assertNotIn("script", result["html"])
+        self.assertNotIn("img", result["html"])
+        self.assertEqual(result["resources"], "blocked")
+
     def test_preview_rejects_unsupported_and_oversized_payloads(self) -> None:
         with self.assertRaisesRegex(ValueError, "FR-RENDERER-UNSUPPORTED-MEDIA"): render_preview("application/pdf", "fixture")
         with self.assertRaisesRegex(ValueError, "FR-RENDERER-PAYLOAD-TOO-LARGE"): render_preview("text/plain", "large", 2)

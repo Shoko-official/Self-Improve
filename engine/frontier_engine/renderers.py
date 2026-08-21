@@ -9,6 +9,7 @@ import io
 import json
 import math
 import re
+from html.parser import HTMLParser
 
 MAX_PREVIEW_BYTES = 1_000_000
 
@@ -18,7 +19,7 @@ def render_preview(media_type: str, content: str, max_bytes: int = MAX_PREVIEW_B
     if len(payload) > max_bytes: raise ValueError("FR-RENDERER-PAYLOAD-TOO-LARGE")
     digest = hashlib.sha256(payload).hexdigest()
     if media_type in {"text/markdown", "text/plain"}: renderer, version, markup, metadata = "markdown.basic", "1", _markdown(content), {}
-    elif media_type == "text/html": renderer, version, markup, metadata = "html.sandboxed", "1", f"<pre>{html.escape(content)}</pre>", {"execution": "disabled"}
+    elif media_type == "text/html": markup, metadata = _html_report(content); renderer, version = "html.structural", "1"
     elif media_type in {"text/csv", "text/tab-separated-values"}:
         markup, metadata = _table(content, "\t" if media_type.endswith("tab-separated-values") else ",")
         renderer, version = "table.delimited", "1"
@@ -40,6 +41,45 @@ def _markdown(content: str) -> str:
     escaped = re.sub(r"```(?:[A-Za-z0-9_+-]+)?\n(.*?)```", r"<pre><code>\1</code></pre>", escaped, flags=re.DOTALL)
     blocks = [block.strip() for block in escaped.split("\n\n") if block.strip()]
     return "".join(block if block.startswith("<h") or block.startswith("<pre>") else f"<p>{block.replace(chr(10), '<br>')}</p>" for block in blocks)
+
+
+class _InertHtmlParser(HTMLParser):
+    allowed = {"article", "section", "div", "span", "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "thead", "tbody", "tr", "th", "td", "pre", "code", "strong", "em", "blockquote", "br", "hr"}
+    void = {"br", "hr"}
+    blocked = {"script", "style", "iframe", "object", "embed", "svg", "math", "form", "input", "button", "link", "meta", "base", "img", "video", "audio", "canvas"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True); self.parts: list[str] = []; self.stack: list[str] = []; self.blocked_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in self.blocked: self.blocked_depth += 1; return
+        if self.blocked_depth or tag not in self.allowed: return
+        self.parts.append(f"<{tag}>")
+        if tag not in self.void: self.stack.append(tag)
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in self.blocked and self.blocked_depth: self.blocked_depth -= 1; return
+        if self.blocked_depth or tag not in self.allowed or tag in self.void: return
+        if tag in self.stack:
+            while self.stack:
+                opened = self.stack.pop(); self.parts.append(f"</{opened}>")
+                if opened == tag: break
+
+    def handle_data(self, data: str) -> None:
+        if not self.blocked_depth: self.parts.append(html.escape(data))
+
+    def close_markup(self) -> str:
+        self.close()
+        while self.stack: self.parts.append(f"</{self.stack.pop()}>")
+        return "".join(self.parts)
+
+
+def _html_report(content: str) -> tuple[str, dict[str, object]]:
+    parser = _InertHtmlParser(); parser.feed(content)
+    markup = parser.close_markup()
+    return markup or "<p>Empty HTML report.</p>", {"execution": "disabled", "resources": "blocked", "sanitizer": "structural-v1"}
 
 
 def _table(content: str, delimiter: str) -> tuple[str, dict[str, object]]:
