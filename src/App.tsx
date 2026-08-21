@@ -51,7 +51,7 @@ type JobRecord = { id: string; project_id: string; operation: string; state: str
 type GenerationRecord = { id: string; project_id: string; runtime: string; model: string; state: string; output: string; diagnostic: { code: string } | null; };
 type ArtifactRecord = { id: string; name: string; media_type: string; created_at: string; };
 type EnvironmentRecord = { name: string; language: string; executable: string | null; python_version: string | null; package_fingerprint: string | null; packages: Record<string, string>; };
-type AgentActivity = { project_id: string; plan: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string }; result: { error?: string; output_chars?: number } }>; };
+type AgentActivity = { project_id: string; plan: string | null; plan_state: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string }; result: { error?: string; output_chars?: number } }>; };
 type LocalModelCatalog = { shoko_gguf: { available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean }; ollama: { available: boolean; models: string[]; reason?: string }; lm_studio_library: { available: boolean; models_root: string; models: Array<{ key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string }> } };
 type KernelResult = { project_id: string; execution: { state: string; stdout: string; stderr: string; error?: string }; job: { id: string; state: string; diagnostic: { code: string } | null; events: Array<{ kind: string; created_at: string }> } };
 type FolderGrant = { id: string; path: string; operation: string; revoked_at: string | null };
@@ -487,6 +487,12 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
     await refreshActivity(projectId);
   }
 
+  async function manageGoal(operation: string, todoText?: string) {
+    if (!projectId) return;
+    await invoke("local_agent_activity_development", { projectId, operation, todoText });
+    await refreshActivity(projectId);
+  }
+
   return (
     <section className="chat-workspace">
       <div className="chat-transcript" aria-live="polite">
@@ -529,6 +535,8 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
           </section>
         )}
       </div>
+
+      {activity?.plan && <section className="activity-ledger"><div className="activity-heading"><Code2 size={16} /><h3>{language === "fr" ? "Gérer l’objectif" : "Manage goal"}</h3></div><div className="workspace-row"><span>{activity.plan_state ?? "active"}: {activity.plan}</span><button type="button" className="minor-action" onClick={() => void manageGoal(activity.plan_state === "paused" ? "goal-active" : "goal-paused")}>{activity.plan_state === "paused" ? (language === "fr" ? "Reprendre" : "Resume") : (language === "fr" ? "Pause" : "Pause")}</button><button type="button" className="minor-action" onClick={() => void manageGoal("goal-completed")}>{language === "fr" ? "Terminer" : "Complete"}</button><button type="button" className="minor-action" onClick={() => void manageGoal("goal-delete")}>{language === "fr" ? "Supprimer" : "Delete"}</button></div><button type="button" className="minor-action" onClick={() => { const next = window.prompt(language === "fr" ? "Modifier l’objectif" : "Edit goal", activity.plan ?? ""); if (next !== null) void manageGoal("goal-update", next); }}>{language === "fr" ? "Modifier l’objectif" : "Edit goal"}</button></section>}
 
       {activity && activity.todos.length > 0 && <section className="activity-ledger"><div className="activity-heading"><ListTodo size={16} /><h3>{language === "fr" ? "Gérer les todos" : "Manage todos"}</h3></div>{activity.todos.map(todo => <div className="workspace-row" key={todo.id}><span>{todo.state}: {todo.text}</span><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, todo.state === "paused" ? "pending" : "paused")}>{todo.state === "paused" ? (language === "fr" ? "Reprendre" : "Resume") : (language === "fr" ? "Pause" : "Pause")}</button><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, "completed")}>{language === "fr" ? "Terminer" : "Complete"}</button><button type="button" className="minor-action" onClick={() => void manageTodo(todo.id, "delete")}>{language === "fr" ? "Supprimer" : "Delete"}</button></div>)}</section>}
 

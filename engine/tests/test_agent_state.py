@@ -14,3 +14,10 @@ class AgentStateTests(unittest.TestCase):
    store.update_todo(todo,"Review evidence");store.transition_todo(todo,"paused")
    self.assertEqual(store.todos("a")[0].text,"Review evidence");self.assertEqual(store.todos("a")[0].state,"paused")
    store.delete_todo(todo);self.assertEqual(store.todos("a"),());store.close()
+ def test_goal_can_be_edited_paused_completed_and_deleted(self)->None:
+  with tempfile.TemporaryDirectory() as directory:
+   store=AgentStateStore(Path(directory)/"agent.sqlite3");store.set_plan("a","Collect evidence")
+   store.set_plan("a","Review evidence");store.transition_plan("a","paused")
+   self.assertEqual(store.plan("a"),"Review evidence");self.assertEqual(store.plan_state("a"),"paused")
+   store.transition_plan("a","completed");self.assertEqual(store.plan_state("a"),"completed")
+   store.delete_plan("a");self.assertIsNone(store.plan("a"));self.assertIsNone(store.plan_state("a"));store.close()

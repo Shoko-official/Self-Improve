@@ -9,13 +9,24 @@ class Todo: id:str; text:str; state:str
 class AgentStateStore:
  def __init__(self,database:Path)->None:
   self.connection=sqlite3.connect(database);self.connection.row_factory=sqlite3.Row
-  self.connection.executescript("CREATE TABLE IF NOT EXISTS plans(project_id TEXT PRIMARY KEY, content TEXT NOT NULL);CREATE TABLE IF NOT EXISTS todos(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,text TEXT NOT NULL,state TEXT NOT NULL);CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,content TEXT NOT NULL);CREATE TABLE IF NOT EXISTS tool_calls(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,tool_name TEXT NOT NULL,request TEXT NOT NULL,state TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);");columns={row["name"]for row in self.connection.execute("PRAGMA table_info(tool_calls)")};
+  self.connection.executescript("CREATE TABLE IF NOT EXISTS plans(project_id TEXT PRIMARY KEY, content TEXT NOT NULL);CREATE TABLE IF NOT EXISTS plan_states(project_id TEXT PRIMARY KEY,state TEXT NOT NULL);CREATE TABLE IF NOT EXISTS todos(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,text TEXT NOT NULL,state TEXT NOT NULL);CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,content TEXT NOT NULL);CREATE TABLE IF NOT EXISTS tool_calls(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,tool_name TEXT NOT NULL,request TEXT NOT NULL,state TEXT NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);");columns={row["name"]for row in self.connection.execute("PRAGMA table_info(tool_calls)")};
   if "created_at" not in columns:self.connection.execute("ALTER TABLE tool_calls ADD COLUMN created_at TEXT NOT NULL DEFAULT ''")
   self.connection.commit()
  def close(self)->None:self.connection.close()
- def set_plan(self,project_id:str,content:str)->None:self.connection.execute("INSERT INTO plans VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET content=excluded.content",(project_id,content));self.connection.commit()
+ def set_plan(self,project_id:str,content:str)->None:
+  if not content.strip():raise ValueError("Goal text is required")
+  self.connection.execute("INSERT INTO plans VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET content=excluded.content",(project_id,content.strip()));self.connection.execute("INSERT INTO plan_states VALUES(?,?) ON CONFLICT(project_id) DO NOTHING",(project_id,"active"));self.connection.commit()
  def plan(self,project_id:str)->str|None:
   row=self.connection.execute("SELECT content FROM plans WHERE project_id=?",(project_id,)).fetchone();return row[0] if row else None
+ def plan_state(self,project_id:str)->str|None:
+  row=self.connection.execute("SELECT state FROM plan_states WHERE project_id=?",(project_id,)).fetchone();return row[0] if row else ("active" if self.plan(project_id) else None)
+ def transition_plan(self,project_id:str,state:str)->None:
+  if state not in {"active","paused","completed"}:raise ValueError("Invalid goal state")
+  if not self.plan(project_id):raise KeyError("Goal not found")
+  self.connection.execute("INSERT INTO plan_states VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET state=excluded.state",(project_id,state));self.connection.commit()
+ def delete_plan(self,project_id:str)->None:
+  if self.connection.execute("DELETE FROM plans WHERE project_id=?",(project_id,)).rowcount!=1:raise KeyError("Goal not found")
+  self.connection.execute("DELETE FROM plan_states WHERE project_id=?",(project_id,));self.connection.commit()
  def add_todo(self,project_id:str,text:str)->str:
   identifier=str(uuid.uuid4());self.connection.execute("INSERT INTO todos VALUES(?,?,?,?)",(identifier,project_id,text,"pending"));self.connection.commit();return identifier
  def transition_todo(self,todo_id:str,state:str)->None:
