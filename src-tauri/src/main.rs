@@ -292,8 +292,12 @@ fn kernel_request(request: serde_json::Value) -> Result<serde_json::Value, Strin
 }
 
 #[tauri::command]
-fn local_agent_activity_development(project_id: String) -> Result<serde_json::Value, String> {
-    run_development_engine(&["agent-activity".to_owned(), "--project-id".to_owned(), project_id])
+fn local_agent_activity_development(project_id: String, todo_id: Option<String>, operation: Option<String>, todo_text: Option<String>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["agent-activity".to_owned(), "--project-id".to_owned(), project_id];
+    if let Some(todo_id) = todo_id { arguments.extend(["--todo-id".to_owned(), todo_id]); }
+    if let Some(operation) = operation { arguments.extend(["--operation".to_owned(), operation]); }
+    if let Some(text) = todo_text { arguments.extend(["--todo-text".to_owned(), text]); }
+    run_development_engine(&arguments)
 }
 
 #[tauri::command]
