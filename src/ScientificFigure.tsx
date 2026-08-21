@@ -6,10 +6,11 @@ import type { Language } from "./i18n";
 type ScatterPoint = { id: string; x: number; y: number; category: string; label: string };
 type MatrixCell = { row: number; column: number; value: number; size: number };
 type SequenceFeature = { id: string; start: number; end: number; label: string; category: string };
+type TreeNode = { id: string; parent_id: string | null; label: string; category: string };
 
 export type ScientificFigureData = {
   version: 1;
-  kind: "scatter" | "matrix" | "sequence";
+  kind: "scatter" | "matrix" | "sequence" | "tree" | "genome";
   title: string;
   subtitle: string;
   x_label?: string;
@@ -20,6 +21,7 @@ export type ScientificFigureData = {
   cells?: MatrixCell[];
   length?: number;
   features?: SequenceFeature[];
+  nodes?: TreeNode[];
 };
 
 type FigurePreview = {
@@ -32,7 +34,7 @@ type FigurePreview = {
   execution: "disabled";
 };
 
-type FigureSelector = { kind: "point"; id: string } | { kind: "cell"; row: number; column: number } | { kind: "feature"; id: string };
+type FigureSelector = { kind: "point"; id: string } | { kind: "cell"; row: number; column: number } | { kind: "feature"; id: string } | { kind: "node"; id: string };
 type ProjectOption = { id: string; name: string; archived_at: string | null };
 
 const palette = ["#5f88ad", "#b87356", "#78935f", "#9277a2", "#b3934f", "#57908a", "#ad6575"];
@@ -109,6 +111,8 @@ export const figureTemplates: Record<ScientificFigureData["kind"], string> = {
       { id: "tail", start: 900, end: 968, label: "Tail", category: "Disordered" },
     ],
   }, null, 2),
+  genome: JSON.stringify({ version: 1, kind: "genome", title: "Local genome locus", subtitle: "Feature coordinates are local draft data", length: 1200, features: [{ id: "gene-a", start: 120, end: 840, label: "GENE A", category: "Gene" }, { id: "exon-a", start: 260, end: 420, label: "Exon 1", category: "Exon" }] }, null, 2),
+  tree: JSON.stringify({ version: 1, kind: "tree", title: "Local phylogeny", subtitle: "Topology is a local draft", nodes: [{ id: "root", label: "Ancestor" }, { id: "alpha", parent_id: "root", label: "Alpha" }, { id: "beta", parent_id: "root", label: "Beta" }] }, null, 2),
 };
 
 function localFigurePreview(source: string): FigurePreview {
@@ -149,7 +153,7 @@ export function ScientificFigureView({ figure, selected, onSelect }: { figure: S
     ? <ScatterFigure figure={figure} selectedKey={selectedKey} onSelect={onSelect} />
     : figure.kind === "matrix"
       ? <MatrixFigure figure={figure} selectedKey={selectedKey} onSelect={onSelect} />
-      : <SequenceFigure figure={figure} selectedKey={selectedKey} onSelect={onSelect} />;
+      : figure.kind === "tree" ? <TreeFigure figure={figure} selectedKey={selectedKey} onSelect={onSelect} /> : <SequenceFigure figure={figure} selectedKey={selectedKey} onSelect={onSelect} />;
   const FigureIcon = figure.kind === "scatter" ? ChartScatter : figure.kind === "matrix" ? Grid3x3 : Dna;
   return (
     <figure className="scientific-figure">
@@ -226,6 +230,12 @@ function SequenceFigure({ figure, selectedKey, onSelect }: { figure: ScientificF
     })}
     {[...colors].map(([category, color], index) => <g key={category} transform={`translate(${82 + index * 130} 520)`}><rect width="12" height="8" rx="2" fill={color} /><text className="figure-legend" x="19" y="8">{category}</text></g>)}
   </>;
+}
+
+function TreeFigure({ figure, selectedKey, onSelect }: { figure: ScientificFigureData; selectedKey: string; onSelect?: (selector: FigureSelector) => void }) {
+  const nodes = figure.nodes ?? [];
+  const positions = new Map(nodes.map((node, index) => [node.id, { x: 130 + index * (520 / Math.max(1, nodes.length - 1)), y: node.parent_id ? 360 : 160 }]));
+  return <>{nodes.filter(node => node.parent_id).map(node => { const child = positions.get(node.id)!; const parent = positions.get(node.parent_id!)!; return <line key={`edge:${node.id}`} className="figure-axis" x1={parent.x} y1={parent.y} x2={child.x} y2={child.y} />; })}{nodes.map(node => { const position = positions.get(node.id)!; const selector: FigureSelector = { kind: "node", id: node.id }; const selected = selectedKey === selectorKey(selector); return <g key={node.id} tabIndex={0} role="button" aria-label={node.label} data-selector={JSON.stringify(selector)} onClick={() => onSelect?.(selector)} onKeyDown={event => activate(event, () => onSelect?.(selector))}><circle className={selected ? "figure-mark selected" : "figure-mark"} cx={position.x} cy={position.y} r={selected ? 10 : 7} /><text className="figure-tick" x={position.x} y={position.y - 16} textAnchor="middle">{node.label}</text></g>; })}</>;
 }
 
 export function ScientificFigureWorkbench({ projects, language }: { projects: ProjectOption[] | null; language: Language }) {

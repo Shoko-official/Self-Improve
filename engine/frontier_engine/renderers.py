@@ -85,7 +85,7 @@ def _notebook(content: str) -> tuple[str, dict[str, object]]:
 def _scientific_figure(content: str) -> dict[str, object]:
     try: raw = json.loads(content)
     except json.JSONDecodeError as error: raise ValueError("FR-RENDERER-FIGURE-INVALID-JSON") from error
-    if not isinstance(raw, dict) or raw.get("version") != 1 or raw.get("kind") not in {"scatter", "matrix", "sequence"}:
+    if not isinstance(raw, dict) or raw.get("version") != 1 or raw.get("kind") not in {"scatter", "matrix", "sequence", "tree", "genome"}:
         raise ValueError("FR-RENDERER-FIGURE-SCHEMA")
     figure = {
         "version": 1,
@@ -99,6 +99,12 @@ def _scientific_figure(content: str) -> dict[str, object]:
     elif raw["kind"] == "matrix":
         figure.update(_matrix_figure(raw))
         selector = {"kind": "cell", "fields": ["row", "column"]}
+    elif raw["kind"] == "sequence":
+        figure.update(_sequence_figure(raw))
+        selector = {"kind": "feature", "field": "id"}
+    elif raw["kind"] == "tree":
+        figure.update(_tree_figure(raw))
+        selector = {"kind": "node", "field": "id"}
     else:
         figure.update(_sequence_figure(raw))
         selector = {"kind": "feature", "field": "id"}
@@ -175,6 +181,23 @@ def _sequence_figure(raw: dict[str, object]) -> dict[str, object]:
             "category": _bounded_text(feature.get("category", "Feature"), f"features[{index}].category", 60),
         })
     return {"length": length, "features": normalized}
+
+
+def _tree_figure(raw: dict[str, object]) -> dict[str, object]:
+    nodes = raw.get("nodes")
+    if not isinstance(nodes, list) or not nodes or len(nodes) > 1_000:
+        raise ValueError("FR-RENDERER-FIGURE-TREE-NODES")
+    normalized = []
+    identifiers = set()
+    for index, node in enumerate(nodes):
+        if not isinstance(node, dict): raise ValueError("FR-RENDERER-FIGURE-TREE-NODE")
+        identifier = _bounded_text(node.get("id"), f"nodes[{index}].id", 80)
+        parent = node.get("parent_id")
+        if identifier in identifiers or parent is not None and not isinstance(parent, str): raise ValueError("FR-RENDERER-FIGURE-TREE-NODE")
+        identifiers.add(identifier)
+        normalized.append({"id": identifier, "parent_id": parent, "label": _bounded_text(node.get("label", identifier), f"nodes[{index}].label", 120), "category": _bounded_text(node.get("category", "Node"), f"nodes[{index}].category", 60)})
+    if sum(node["parent_id"] is None for node in normalized) != 1 or any(node["parent_id"] is not None and node["parent_id"] not in identifiers for node in normalized): raise ValueError("FR-RENDERER-FIGURE-TREE-TOPOLOGY")
+    return {"nodes": normalized}
 
 
 def _label_axis(raw: object, field: str) -> list[str]:

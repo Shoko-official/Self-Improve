@@ -58,3 +58,14 @@ class RendererTests(unittest.TestCase):
             render_preview("application/vnd.shokos.figure+json", json.dumps({"version": 1, "kind": "scatter", "title": "Duplicate", "points": [{"id": "a", "x": 1, "y": 2}, {"id": "a", "x": 2, "y": 3}]}))
         with self.assertRaisesRegex(ValueError, "FR-RENDERER-FIGURE-NUMBER"):
             render_preview("application/vnd.shokos.figure+json", '{"version":1,"kind":"scatter","title":"Invalid","points":[{"id":"a","x":NaN,"y":2}]}')
+
+    def test_tree_figure_preserves_node_selectors(self) -> None:
+        preview = render_preview("application/vnd.shokos.figure+json", json.dumps({"version": 1, "kind": "tree", "title": "Phylogeny", "nodes": [{"id": "root", "label": "Root"}, {"id": "leaf", "parent_id": "root", "label": "Leaf"}]}))
+        self.assertEqual(preview["renderer_id"], "figure.tree")
+        self.assertEqual(preview["selector_schema"], {"kind": "node", "field": "id"})
+        self.assertEqual(preview["figure"]["nodes"][1]["parent_id"], "root")
+
+    def test_genome_figure_uses_bounded_feature_coordinates(self) -> None:
+        preview = render_preview("application/vnd.shokos.figure+json", json.dumps({"version": 1, "kind": "genome", "title": "Locus", "length": 1200, "features": [{"id": "gene-a", "start": 120, "end": 840, "label": "GENE A"}]}))
+        self.assertEqual(preview["renderer_id"], "figure.genome")
+        self.assertEqual(preview["selector_schema"], {"kind": "feature", "field": "id"})
