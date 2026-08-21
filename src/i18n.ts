@@ -154,3 +154,20 @@ export function surfaceText(language: Language, key: SurfaceMessageKey): string 
   }
   return surfaceMessages[language][key];
 }
+
+const operationalMessages = {
+  en: {
+    computeUnavailable: "Compute monitor unavailable", computeDescription: "Local jobs retain queued, running, cancellation-requested, cancelled, succeeded, and failed states. No remote host or cloud provider is configured.", projectAndOperation: "Project ID and operation", projectId: "Project ID", queueJob: "Queue job", cancel: "Cancel", retry: "Retry", noJobs: "No jobs queued", noGenerations: "No persisted local generations. Install a compatible runtime before creating one.", noOutput: "no output", refreshCompute: "Refresh compute monitor",
+    localEnvironments: "Local environments", environmentDescription: "Create isolated environments locally. Package installation is a separate, approval-gated network action and the resulting package fingerprint remains inspectable.", newPythonEnvironment: "New local Python environment", createPythonEnvironment: "Create Python environment", probePython: "Probe Python", probeR: "Probe R", environmentPackages: "Environment and packages", approvePackageNetwork: "I approve network access to install these packages.", installPackages: "Install packages", environmentCreation: "Environment creation: no package download", providerFallback: "Provider fallback: forbidden", packageApproval: "Package installs: explicit network approval required", noExecutable: "no executable", noFingerprint: "no fingerprint", environmentProbeUnavailable: "Environment probe unavailable.", environmentCreationFailed: "Python environment creation failed.", packageInstallationFailed: "Package installation failed.",
+  },
+  fr: {
+    computeUnavailable: "Moniteur de calcul indisponible", computeDescription: "Les tâches locales conservent les états en attente, en cours, demande d'annulation, annulée, réussie et échouée. Aucun hôte distant ni fournisseur cloud n'est configuré.", projectAndOperation: "Identifiant du projet et opération", projectId: "Identifiant du projet", queueJob: "Mettre la tâche en file", cancel: "Annuler", retry: "Réessayer", noJobs: "Aucune tâche en file", noGenerations: "Aucune génération locale enregistrée. Installez un runtime compatible avant d'en créer une.", noOutput: "aucune sortie", refreshCompute: "Actualiser le moniteur de calcul",
+    localEnvironments: "Environnements locaux", environmentDescription: "Créez des environnements isolés localement. L'installation de paquets est une action réseau distincte, soumise à approbation, et son empreinte reste inspectable.", newPythonEnvironment: "Nouvel environnement Python local", createPythonEnvironment: "Créer l'environnement Python", probePython: "Sonder Python", probeR: "Sonder R", environmentPackages: "Environnement et paquets", approvePackageNetwork: "J'autorise l'accès réseau pour installer ces paquets.", installPackages: "Installer les paquets", environmentCreation: "Création d'environnement: aucun téléchargement de paquet", providerFallback: "Repli vers un fournisseur: interdit", packageApproval: "Installation de paquets: approbation réseau explicite requise", noExecutable: "aucun exécutable", noFingerprint: "aucune empreinte", environmentProbeUnavailable: "Sonde d'environnement indisponible.", environmentCreationFailed: "Création de l'environnement Python échouée.", packageInstallationFailed: "Installation des paquets échouée.",
+  },
+} as const;
+
+export type OperationalMessageKey = keyof typeof operationalMessages.en;
+
+export function operationalText(language: Language, key: OperationalMessageKey): string {
+  return operationalMessages[language][key];
+}

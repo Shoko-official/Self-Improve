@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { surfaceText, translate } from "./i18n";
+import { operationalText, surfaceText, translate } from "./i18n";
 
 describe("translate", () => {
   it("resolves the primary navigation in both supported languages", () => {
@@ -21,5 +21,12 @@ describe("translate", () => {
     expect(surfaceText("fr", "refreshProjectLedger")).toBe("Actualiser le registre des projets");
     expect(surfaceText("en", "runEvidenceReview")).toBe("Run evidence review");
     expect(surfaceText("fr", "saveAnnotation")).toBe("Enregistrer l'annotation");
+  });
+
+  it("resolves operational compute and environment copy in both supported languages", () => {
+    expect(operationalText("en", "queueJob")).toBe("Queue job");
+    expect(operationalText("fr", "queueJob")).toBe("Mettre la tâche en file");
+    expect(operationalText("en", "approvePackageNetwork")).toBe("I approve network access to install these packages.");
+    expect(operationalText("fr", "localEnvironments")).toBe("Environnements locaux");
   });
 });
