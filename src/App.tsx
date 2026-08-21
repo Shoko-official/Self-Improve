@@ -393,7 +393,7 @@ const frenchCommandDescriptions: Record<string, string> = {
   "/new": "Effacer le brouillon et la sortie", "/projects": "Ouvrir les projets locaux", "/models": "Ouvrir la gestion des modèles", "/scheduled": "Ouvrir les pipelines planifiés", "/automations": "Ouvrir les pipelines IA locaux", "/plugins": "Ouvrir les capacités connectées", "/mcp": "Inspecter les connecteurs MCP", "/skills": "Inspecter les skills installés", "/extensions": "Inspecter les extensions exécutables", "/science": "Ouvrir l'espace Science", "/fast": "Utiliser le raisonnement rapide", "/deep": "Utiliser le raisonnement approfondi", "/plan": "Préparer un plan explicite avant exécution", "/read": "Limiter l'agent à la lecture", "/ask": "Demander avant les actions protégées", "/full": "Autoriser l'accès complet au projet", "/doctor": "Exécuter le diagnostic du moteur local", "/settings": "Ouvrir les réglages",
 };
 
-function ChatSurface({ projects, language, onNavigate, preferredProjectId, onProjectChange }: { projects: ProjectRecord[] | null; language: Language; onNavigate: (surface: Surface) => void; preferredProjectId: string; onProjectChange: (projectId: string) => void }) {
+export function ChatSurface({ projects, language, onNavigate, preferredProjectId, onProjectChange }: { projects: ProjectRecord[] | null; language: Language; onNavigate: (surface: Surface) => void; preferredProjectId: string; onProjectChange: (projectId: string) => void }) {
   const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
   const [projectId, setProjectId] = useState("");
   const [model, setModel] = useState("");
@@ -457,6 +457,8 @@ function ChatSurface({ projects, language, onNavigate, preferredProjectId, onPro
     const query = prompt.startsWith("$") ? prompt.slice(1).toLowerCase() : "";
     return availableSkills.filter(skill => `${skill.name ?? ""} ${skill.id}`.toLowerCase().includes(query));
   }, [availableSkills, prompt]);
+  const needsProject = activeProjects.length === 0;
+  const needsModel = !needsProject && !model && catalog !== null && !providerProfile?.models.length;
 
   async function refreshActivity(nextProjectId = projectId) {
     if (!nextProjectId) return;
@@ -577,6 +579,8 @@ function ChatSurface({ projects, language, onNavigate, preferredProjectId, onPro
   return (
     <section className="chat-workspace">
       <div className="chat-transcript" aria-live="polite">
+        {needsProject && <section className="chat-empty"><span className="empty-icon"><FolderKanban size={19} /></span><h2>{language === "fr" ? "Créez votre premier projet" : "Create your first project"}</h2><p>{language === "fr" ? "Un projet local organise les conversations, les fichiers et les autorisations." : "A local project organizes conversations, files, and permissions."}</p><button type="button" onClick={() => onNavigate("workspaces")}><Plus size={15} />{language === "fr" ? "Ouvrir les projets" : "Open projects"}</button></section>}
+        {needsModel && <section className="chat-empty"><span className="empty-icon"><Boxes size={19} /></span><h2>{language === "fr" ? "Choisissez un modèle local" : "Choose a local model"}</h2><p>{language === "fr" ? "Ajoutez un modèle Shoko, Ollama ou un fichier GGUF déjà présent sur cette machine." : "Add a Shoko model, Ollama model, or a GGUF file already on this machine."}</p><button type="button" onClick={() => onNavigate("models")}><Boxes size={15} />{language === "fr" ? "Ouvrir les modèles" : "Open models"}</button></section>}
         {lastPrompt && (
           <article className="chat-message user-message">
             <p className="message-author">{language === "fr" ? "Vous" : "You"}</p>
