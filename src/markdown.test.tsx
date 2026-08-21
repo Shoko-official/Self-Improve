@@ -42,12 +42,13 @@ describe("ArtifactPreviewPanel", () => {
 describe("artifact workflow localization", () => {
   it("renders French artifact and annotation controls", () => {
     const artifacts = renderToStaticMarkup(<ArtifactsSurface language="fr" />);
-    const annotations = renderToStaticMarkup(<AnnotationSurface language="fr" />);
+    const annotations = renderToStaticMarkup(<AnnotationSurface language="fr" initialVersionId="version-exacte" />);
 
     expect(artifacts).toContain("Registre des artefacts");
     expect(artifacts).toContain("Enregistrer l&#x27;artefact");
     expect(annotations).toContain("ANNOTATIONS VERSIONNÉES");
     expect(annotations).toContain("Région PDF");
+    expect(annotations).toContain('value="version-exacte"');
   });
 });
 
