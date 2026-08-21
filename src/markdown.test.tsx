@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AnnotationSurface, ArtifactPreviewPanel, ArtifactsSurface, MarkdownContent, mcpMarkdown } from "./App";
+import { AnnotationSurface, ArtifactPreviewPanel, ArtifactsSurface, MarkdownContent, RagSurface, mcpMarkdown } from "./App";
 
 describe("MarkdownContent", () => {
   it("renders GitHub-flavored Markdown structures", () => {
@@ -49,6 +49,16 @@ describe("artifact workflow localization", () => {
     expect(annotations).toContain("ANNOTATIONS VERSIONNÉES");
     expect(annotations).toContain("Région PDF");
     expect(annotations).toContain('value="version-exacte"');
+  });
+});
+
+describe("RagSurface", () => {
+  it("offers a local file picker while retaining editable source fields", () => {
+    const html = renderToStaticMarkup(<RagSurface language="en" />);
+
+    expect(html).toContain('type="file"');
+    expect(html).toContain("Add a local file");
+    expect(html).toContain("file:///notes/source.md");
   });
 });
 
