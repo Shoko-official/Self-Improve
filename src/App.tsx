@@ -892,6 +892,7 @@ function AgentSurface({ projects }: { projects: ProjectRecord[] | null }) { cons
 function WorkspaceSurface({ projects, error, refresh, create: _create }: { projects: ProjectRecord[] | null; error: string | null; refresh: () => Promise<void>; create: (name: string) => Promise<void> }) {
   const language = localStorage.getItem("frontier-language") === "fr" ? "fr" : "en";
   const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
+  const archivedProjects = projects?.filter(project => project.archived_at !== null) ?? [];
   const [selected, setSelected] = useState("");
   const [name, setName] = useState("");
   const [folder, setFolder] = useState("");
@@ -1000,6 +1001,17 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
     await refresh();
   }
 
+  async function restore(projectId: string) {
+    try {
+      await invoke("restore_workspace_project_development", { projectId });
+      await refresh();
+      setSelected(projectId);
+      setMessage(language === "fr" ? "Projet restauré." : "Project restored.");
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Project restoration failed.");
+    }
+  }
+
   return <section className="projects-surface">
     <header className="projects-header">
       <div><h2>{language === "fr" ? "Projets" : "Projects"}</h2><p>{language === "fr" ? "Contexte, discussions et dossiers locaux." : "Context, chats, and local folders."}</p></div>
@@ -1020,6 +1032,7 @@ function WorkspaceSurface({ projects, error, refresh, create: _create }: { proje
         {projects === null && <p>{error ?? (language === "fr" ? "Chargement..." : "Loading...")}</p>}
         {projects !== null && activeProjects.length === 0 && <div className="project-empty"><FolderKanban size={22} /><strong>{language === "fr" ? "Aucun projet" : "No projects yet"}</strong><p>{language === "fr" ? "Créez un projet pour regrouper vos discussions et fichiers." : "Create a project to group chats and files."}</p></div>}
         {activeProjects.map(project => <button className="project-list-item" aria-current={selected === project.id ? "true" : undefined} key={project.id} type="button" onClick={() => void loadProject(project.id)}><FolderKanban size={15} /><span><strong>{project.name}</strong><small>{new Date(project.created_at).toLocaleDateString()}</small></span></button>)}
+        {archivedProjects.length > 0 && <section className="archived-project-list"><small>{language === "fr" ? "Archivés" : "Archived"}</small>{archivedProjects.map(project => <div className="workspace-row" key={project.id}><span>{project.name}</span><button className="minor-action" type="button" onClick={() => void restore(project.id)}>{language === "fr" ? "Restaurer" : "Restore"}</button></div>)}</section>}
       </aside>
 
       <div className="project-detail-pane">
