@@ -49,7 +49,7 @@ type CapabilityReport = { operatingSystem: string; architecture: string; logical
 type EngineDoctorReport = { checked_at: string; host: { logical_cores: number; machine: string; release: string; system: string; }; limits: string[]; protocol_version: number; status: string; };
 type DesktopNotification = { id: string; source: string; severity: "info" | "warning" | "error"; title: string; body: string; deep_link: string; acknowledged_at: string | null; };
 type ClaimRecord = { id: string; claim_type: string; status: "draft" | "supported" | "disputed" | "retracted"; text: string; uncertainty: string; evidence: Array<{ evidence_uri: string; selector: string }>; };
-type ProjectRecord = { id: string; name: string; instructions: string; archived_at: string | null; created_at: string; };
+export type ProjectRecord = { id: string; name: string; instructions: string; archived_at: string | null; created_at: string; };
 type SessionRecord = { id: string; title: string; parent_session_id: string | null; reasoning_effort: string; starred: number; archived_at: string | null; created_at: string; };
 type JobRecord = { id: string; project_id: string; operation: string; state: string; created_at: string; };
 type GenerationRecord = { id: string; job_id: string; project_id: string; runtime: string; model: string; state: string; output: string; diagnostic: { code: string } | null; };
@@ -88,6 +88,12 @@ const navigation: NavigationItem[] = [
 export const primaryNavigation = navigation.filter(item => ["chat", "workspaces", "models", "science"].includes(item.id));
 export const secondaryNavigation = navigation.filter(item => ["artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "kernel"].includes(item.id));
 
+export function resolveProjectId(projects: ProjectRecord[], preferredProjectId: string, currentProjectId: string): string {
+  if (projects.some(project => project.id === preferredProjectId)) return preferredProjectId;
+  if (projects.some(project => project.id === currentProjectId)) return currentProjectId;
+  return projects[0]?.id ?? "";
+}
+
 export function App() {
   const [surface, setSurface] = useState<Surface>("chat");
   const [language, setLanguage] = useState<Language>(() => localStorage.getItem("frontier-language") === "fr" ? "fr" : "en");
@@ -104,6 +110,7 @@ export function App() {
   const [engineError, setEngineError] = useState<string | null>(null);
   const [projectRecords, setProjectRecords] = useState<ProjectRecord[] | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const activeItem = navigation.find(item => item.id === surface) ?? navigation[0];
   const ActiveIcon = activeItem.icon;
   const activeProjects = projectRecords?.filter(project => project.archived_at === null) ?? [];
@@ -159,6 +166,10 @@ export function App() {
     await invoke("create_workspace_project_development", { name });
     await refreshWorkspaces();
   }
+
+  useEffect(() => {
+    setSelectedProjectId(current => resolveProjectId(activeProjects, current, current));
+  }, [activeProjects]);
 
   function startNewChat() {
     setChatKey(value => value + 1);
@@ -236,7 +247,7 @@ export function App() {
             </button>
           </div>
           {activeProjects.slice(0, 4).map(project => (
-            <button key={project.id} className="project-shortcut" type="button" onClick={() => setSurface("workspaces")}>
+            <button key={project.id} className="project-shortcut" type="button" onClick={() => { setSelectedProjectId(project.id); setSurface("chat"); }}>
               <FolderKanban size={14} />
               <span>{project.name}</span>
             </button>
@@ -291,7 +302,7 @@ export function App() {
 
         <div className="workspace-grid">
           <section className="workspace-content" aria-label={language === "fr" ? activeItem.fr : activeItem.en}>
-            {surface === "chat" && <ChatSurface key={chatKey} projects={projectRecords} language={language} onNavigate={setSurface} />}
+            {surface === "chat" && <ChatSurface key={chatKey} projects={projectRecords} language={language} onNavigate={setSurface} preferredProjectId={selectedProjectId} onProjectChange={setSelectedProjectId} />}
             {surface === "workspaces" && <WorkspaceSurface projects={projectRecords} error={workspaceError} refresh={refreshWorkspaces} create={createWorkspace} />}
             {surface === "models" && <ModelsSurface report={report} error={error} probe={probe} engineReport={engineReport} engineError={engineError} probeEngine={probeEngine} projects={projectRecords} language={language} />}
             {surface === "science" && <ScienceWorkbench projects={projectRecords} language={language} />}
@@ -307,7 +318,7 @@ export function App() {
           </section>
 
           {showInspector && (
-            <ProjectContextPanel language={language} project={activeProjects[0] ?? null} report={report} engineStatus={engineReport?.status ?? null} onClose={() => setInspectorOpen(false)} />
+            <ProjectContextPanel language={language} project={activeProjects.find(project => project.id === selectedProjectId) ?? null} report={report} engineStatus={engineReport?.status ?? null} onClose={() => setInspectorOpen(false)} />
           )}
         </div>
       </main>
@@ -382,7 +393,7 @@ const frenchCommandDescriptions: Record<string, string> = {
   "/new": "Effacer le brouillon et la sortie", "/projects": "Ouvrir les projets locaux", "/models": "Ouvrir la gestion des modèles", "/scheduled": "Ouvrir les pipelines planifiés", "/automations": "Ouvrir les pipelines IA locaux", "/plugins": "Ouvrir les capacités connectées", "/mcp": "Inspecter les connecteurs MCP", "/skills": "Inspecter les skills installés", "/extensions": "Inspecter les extensions exécutables", "/science": "Ouvrir l'espace Science", "/fast": "Utiliser le raisonnement rapide", "/deep": "Utiliser le raisonnement approfondi", "/plan": "Préparer un plan explicite avant exécution", "/read": "Limiter l'agent à la lecture", "/ask": "Demander avant les actions protégées", "/full": "Autoriser l'accès complet au projet", "/doctor": "Exécuter le diagnostic du moteur local", "/settings": "Ouvrir les réglages",
 };
 
-function ChatSurface({ projects, language, onNavigate }: { projects: ProjectRecord[] | null; language: Language; onNavigate: (surface: Surface) => void }) {
+function ChatSurface({ projects, language, onNavigate, preferredProjectId, onProjectChange }: { projects: ProjectRecord[] | null; language: Language; onNavigate: (surface: Surface) => void; preferredProjectId: string; onProjectChange: (projectId: string) => void }) {
   const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
   const [projectId, setProjectId] = useState("");
   const [model, setModel] = useState("");
@@ -403,9 +414,9 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
   const [remotePreview, setRemotePreview] = useState<{ prompt: string; model: string; profile: ProviderProfile; endpoint: string; textBytes: number } | null>(null);
 
   useEffect(() => {
-    const nextProjectId = activeProjects.some(project => project.id === projectId) ? projectId : activeProjects[0]?.id ?? "";
+    const nextProjectId = resolveProjectId(activeProjects, preferredProjectId, projectId);
     if (nextProjectId !== projectId) setProjectId(nextProjectId);
-  }, [activeProjects, projectId]);
+  }, [activeProjects, preferredProjectId, projectId]);
 
   useEffect(() => {
     if (!projectId) {
@@ -637,7 +648,7 @@ function ChatSurface({ projects, language, onNavigate }: { projects: ProjectReco
             {filteredSkills.map(skill => <button key={skill.id} type="button" onClick={() => { setSkillId(skill.id); setPrompt(""); setPalette(null); }}><Library size={15} /><span><strong>${skill.name ?? skill.id}</strong><small>{skill.description ?? skill.id}</small></span></button>)}
           </div>
         )}
-        <div className="composer-project-row"><FolderKanban size={14} /><select value={projectId} onChange={event => setProjectId(event.target.value)} aria-label={language === "fr" ? "Projet" : "Project"} disabled={activeProjects.length === 0}>{activeProjects.length === 0 && <option value="">{language === "fr" ? "Aucun projet actif" : "No active project"}</option>}{activeProjects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select>{skillId && <button type="button" onClick={() => setSkillId("")} className="composer-skill-chip">${availableSkills.find(skill => skill.id === skillId)?.name ?? skillId}</button>}</div>
+        <div className="composer-project-row"><FolderKanban size={14} /><select value={projectId} onChange={event => { setProjectId(event.target.value); onProjectChange(event.target.value); }} aria-label={language === "fr" ? "Projet" : "Project"} disabled={activeProjects.length === 0}>{activeProjects.length === 0 && <option value="">{language === "fr" ? "Aucun projet actif" : "No active project"}</option>}{activeProjects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}</select>{skillId && <button type="button" onClick={() => setSkillId("")} className="composer-skill-chip">${availableSkills.find(skill => skill.id === skillId)?.name ?? skillId}</button>}</div>
         <textarea
           value={prompt}
           onChange={event => { const value = event.target.value; setPrompt(value); setPalette(value.startsWith("/") ? "commands" : value.startsWith("$") ? "resources" : null); }}
