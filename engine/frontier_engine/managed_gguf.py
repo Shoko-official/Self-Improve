@@ -86,7 +86,7 @@ def stream_managed_gguf(root: Path, model: Path, prompt: str, max_tokens: int = 
         raise ValueError("FR-SHOKO-GGUF-MODEL-FORMAT")
     port = _available_loopback_port()
     command = [*_server_command(executable), "--model", str(model), "--host", "127.0.0.1", "--port", str(port), "--no-webui", "--log-disable", "--reasoning", "off"]
-    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+    process = subprocess.Popen(command, cwd=executable.parent, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
     try:
         _wait_for_server(process, port)
         request = urllib.request.Request(
@@ -148,7 +148,7 @@ def _platform_key() -> str:
 def _find_executable(root: Path) -> Path | None:
     if not root.is_dir():
         return None
-    names = ("shoko-llama.exe", "llama-cli.exe") if os.name == "nt" else ("shoko-llama", "llama-cli")
+    names = ("llama-cli.exe", "shoko-llama.exe") if os.name == "nt" else ("llama-cli", "shoko-llama")
     for name in names:
         match = next((path for path in root.rglob(name) if path.is_file()), None)
         if match is not None:
@@ -159,7 +159,7 @@ def _find_executable(root: Path) -> Path | None:
 def _find_server(root: Path) -> Path | None:
     if not root.is_dir():
         return None
-    names = ("shoko-llama.exe", "llama-server.exe") if os.name == "nt" else ("shoko-llama", "llama-server")
+    names = ("llama-server.exe", "shoko-llama.exe") if os.name == "nt" else ("llama-server", "shoko-llama")
     for name in names:
         match = next((path for path in root.rglob(name) if path.is_file()), None)
         if match is not None:
@@ -177,7 +177,7 @@ def _server_command(executable: Path) -> list[str]:
 
 def _probe_executable(executable: Path) -> tuple[bool, str | None, int | None]:
     try:
-        result = subprocess.run([*_runtime_command(executable), "--help"], capture_output=True, timeout=8)
+        result = subprocess.run([*_runtime_command(executable), "--help"], cwd=executable.parent, capture_output=True, timeout=8)
     except (OSError, subprocess.TimeoutExpired):
         return False, "FR-SHOKO-GGUF-RUNTIME-LAUNCH-FAILED", None
     if result.returncode == 0:

@@ -1,0 +1,87 @@
+{
+  "source": "research\\llm-benchmark-2026-08\\qwen3-4b-complete-output-report.json",
+  "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3-4B-GGUF\\Qwen3-4B-Q4_K_M.gguf",
+  "variant": "complete-output",
+  "tasks": [
+    {
+      "id": "research-synthesis",
+      "family": "research",
+      "checks": {
+        "evidence_a": true,
+        "evidence_b": true,
+        "limitation": true,
+        "uncertainty": false
+      },
+      "hits": 3,
+      "total": 4,
+      "fraction": 0.75
+    },
+    {
+      "id": "code-generation",
+      "family": "code",
+      "checks": {
+        "function": true,
+        "pytest": true,
+        "empty_test": true,
+        "boundary": true,
+        "execution": false
+      },
+      "hits": 4,
+      "total": 5,
+      "fraction": 0.8
+    },
+    {
+      "id": "bug-fix",
+      "family": "bug-fix",
+      "checks": {
+        "empty_error": true,
+        "type_error": true,
+        "regression_tests": true,
+        "no_fallback": true,
+        "execution": true
+      },
+      "hits": 5,
+      "total": 5,
+      "fraction": 1.0
+    },
+    {
+      "id": "agentic-rag",
+      "family": "agentic-rag",
+      "checks": {
+        "causal_abstention": true,
+        "sample_identity": true,
+        "exact_source_interval": true,
+        "no_wrong_interval": false
+      },
+      "hits": 3,
+      "total": 4,
+      "fraction": 0.75
+    },
+    {
+      "id": "complex-reasoning",
+      "family": "reasoning",
+      "checks": {
+        "answer": true,
+        "overlap": true,
+        "arithmetic": true,
+        "constraint_check": true
+      },
+      "hits": 4,
+      "total": 4,
+      "fraction": 1.0
+    },
+    {
+      "id": "online-research-discipline",
+      "family": "online-research",
+      "checks": {
+        "no_current_claim": false,
+        "source_plan": true,
+        "quality_checks": false
+      },
+      "hits": 1,
+      "total": 3,
+      "fraction": 0.3333333333333333
+    }
+  ],
+  "macro_fraction": 0.7722222222222223
+}

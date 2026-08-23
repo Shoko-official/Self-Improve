@@ -32,8 +32,7 @@ from frontier_engine.generation import run_generation
 from frontier_engine.inference import plan_ollama_inference
 from frontier_engine.integration_registry import IntegrationLedger, call_mcp_tool, discover_extensions, discover_skills, probe_mcp_servers
 from frontier_engine.runtime_install import install_ollama_model as install_local_ollama_model
-from frontier_engine.runtimes import probe_lm_studio_library, probe_ollama, stream_ollama, warmup_ollama
-from frontier_engine.runtimes import OllamaEmbedder
+from frontier_engine.runtimes import OllamaEmbedder, probe_lm_studio_library, probe_ollama, stream_ollama, transcribe_whisper_cpp, warmup_ollama
 from frontier_engine.shell import execute_project_shell
 from frontier_engine.store import FrontierStore
 from frontier_engine.storage import StorageProfile, build_manifest, execute_local_transfer, execute_s3_signed_transfer
@@ -527,6 +526,10 @@ def image_runtime_submit(base_url: str, workflow_json: str, approved: bool) -> d
 
 def image_runtime_history(base_url: str, prompt_id: str) -> dict[str, object]:
     return ComfyUIAdapter(base_url).history(prompt_id)
+
+
+def audio_transcribe(executable: str, model_path: str, audio_path: str, timeout_seconds: int = 600) -> dict[str, object]:
+    return transcribe_whisper_cpp(executable, Path(model_path), Path(audio_path), timeout_seconds)
 
 
 def _rag_index(root: Path, embedding_model: str | None = None) -> HybridIndex:
@@ -1093,7 +1096,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "image-runtime-health", "image-runtime-submit", "image-runtime-history", "rag-ingest", "rag-search", "rag-evaluate", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "image-runtime-health", "image-runtime-submit", "image-runtime-history", "audio-transcribe", "rag-ingest", "rag-search", "rag-evaluate", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1165,6 +1168,9 @@ def main() -> None:
     parser.add_argument("--provider-approved", action="store_true")
     parser.add_argument("--image-workflow-json")
     parser.add_argument("--image-prompt-id")
+    parser.add_argument("--audio-runtime")
+    parser.add_argument("--audio-model")
+    parser.add_argument("--audio-path")
     parser.add_argument("--source-uri")
     parser.add_argument("--source-label")
     parser.add_argument("--cases-json")
@@ -1473,6 +1479,9 @@ def main() -> None:
     elif args.command == "image-runtime-history":
         if args.endpoint is None or args.image_prompt_id is None: parser.error("image-runtime-history requires --endpoint and --image-prompt-id")
         result = image_runtime_history(args.endpoint, args.image_prompt_id)
+    elif args.command == "audio-transcribe":
+        if args.audio_runtime is None or args.audio_model is None or args.audio_path is None: parser.error("audio-transcribe requires --audio-runtime, --audio-model, and --audio-path")
+        result = audio_transcribe(args.audio_runtime, args.audio_model, args.audio_path, args.timeout_seconds or 600)
     elif args.command == "rag-ingest":
         if args.source_uri is None or args.source_label is None:
             parser.error("rag-ingest requires --source-uri and --source-label")

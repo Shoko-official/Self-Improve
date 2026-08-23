@@ -7,6 +7,7 @@ import ipaddress
 import os
 import shutil
 import subprocess
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -160,6 +161,44 @@ class OllamaEmbedder:
         if not isinstance(embeddings, list) or len(embeddings) != 1 or not isinstance(embeddings[0], list) or not embeddings[0] or not all(isinstance(value, (int, float)) for value in embeddings[0]):
             raise RuntimeError("FR-RUNTIME-OLLAMA-EMBEDDING-INVALID")
         return [float(value) for value in embeddings[0]]
+
+
+def transcribe_whisper_cpp(executable: str, model_path: Path, audio_path: Path, timeout_seconds: int = 600) -> dict[str, object]:
+    """Run an explicitly selected local whisper.cpp CLI and verify its text output."""
+    if not executable.strip():
+        raise ValueError("FR-AUDIO-WHISPER-EXECUTABLE")
+    if not 1 <= timeout_seconds <= 3600:
+        raise ValueError("FR-AUDIO-WHISPER-TIMEOUT")
+    model = model_path.expanduser().resolve()
+    audio = audio_path.expanduser().resolve()
+    if not model.is_file():
+        raise FileNotFoundError("FR-AUDIO-WHISPER-MODEL-NOT-FOUND")
+    if not audio.is_file():
+        raise FileNotFoundError("FR-AUDIO-WHISPER-AUDIO-NOT-FOUND")
+    if audio.suffix.lower() not in {".flac", ".mp3", ".ogg", ".wav"}:
+        raise ValueError("FR-AUDIO-WHISPER-AUDIO-FORMAT")
+    candidate = Path(executable).expanduser()
+    resolved_executable = candidate.resolve() if candidate.is_file() else shutil.which(executable)
+    if not resolved_executable:
+        raise LocalRuntimeUnavailable("FR-AUDIO-WHISPER-NOT-FOUND")
+    runtime = str(resolved_executable)
+    try:
+        subprocess.run([runtime, "--help"], capture_output=True, text=True, timeout=10, check=True)
+        with tempfile.TemporaryDirectory(prefix="shokos-llm-whisper-") as directory:
+            output_base = Path(directory) / "transcript"
+            subprocess.run([runtime, "--model", str(model), "--file", str(audio), "--output-txt", "--output-file", str(output_base), "--no-prints"], capture_output=True, text=True, timeout=timeout_seconds, check=True)
+            output = output_base.with_suffix(".txt")
+            if not output.is_file():
+                raise RuntimeError("FR-AUDIO-WHISPER-OUTPUT-MISSING")
+            transcript = output.read_text(encoding="utf-8").strip()
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError("FR-AUDIO-WHISPER-TIMEOUT") from error
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or error.stdout or "").strip()[:600]
+        raise RuntimeError(f"FR-AUDIO-WHISPER-FAILED: {detail or error.returncode}") from error
+    if not transcript:
+        raise RuntimeError("FR-AUDIO-WHISPER-EMPTY-OUTPUT")
+    return {"runtime": runtime, "model_path": str(model), "audio_path": str(audio), "transcript": transcript, "output_bytes": len(transcript.encode("utf-8"))}
 
 
 def stream_ollama_pull(model: str) -> Iterator[str]:

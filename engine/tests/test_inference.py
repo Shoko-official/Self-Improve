@@ -1,12 +1,14 @@
 import json
 import os
 import threading
+import tempfile
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from unittest.mock import patch
 
 from frontier_engine.inference import plan_ollama_inference
-from frontier_engine.runtimes import OllamaEmbedder, probe_ollama, stream_ollama, warmup_ollama
+from frontier_engine.runtimes import OllamaEmbedder, probe_ollama, stream_ollama, transcribe_whisper_cpp, warmup_ollama
 
 
 class OllamaHandler(BaseHTTPRequestHandler):
@@ -73,6 +75,23 @@ class InferenceTests(unittest.TestCase):
 
     def test_embeddings_use_the_verified_local_ollama_api(self) -> None:
         self.assertEqual(OllamaEmbedder("qwen3", probe_ollama()).embed("local retrieval"), [0.25, 0.75])
+
+    def test_whisper_cpp_requires_an_actual_local_text_output(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); model = root / "model.bin"; audio = root / "sample.wav"; model.write_bytes(b"model"); audio.write_bytes(b"audio")
+            def run(command: list[str], **_: object):
+                if "--output-file" in command:
+                    Path(command[command.index("--output-file") + 1]).with_suffix(".txt").write_text("verified local transcript", encoding="utf-8")
+                return __import__("subprocess").CompletedProcess(command, 0, "", "")
+            with patch("frontier_engine.runtimes.shutil.which", return_value="whisper-cli"), patch("frontier_engine.runtimes.subprocess.run", side_effect=run) as process:
+                result = transcribe_whisper_cpp("whisper-cli", model, audio)
+            self.assertEqual(result["transcript"], "verified local transcript")
+            self.assertEqual(process.call_args_list[1].args[0][1:5], ["--model", str(model.resolve()), "--file", str(audio.resolve())])
+
+    def test_whisper_cpp_rejects_missing_local_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(FileNotFoundError, "MODEL-NOT-FOUND"):
+                transcribe_whisper_cpp("whisper-cli", Path(directory) / "missing.bin", Path(directory) / "missing.wav")
 
     def test_profile_selects_bounded_defaults_and_memory_evidence(self) -> None:
         probe = probe_ollama()

@@ -892,6 +892,28 @@ fn image_runtime_history_development(
 }
 
 #[tauri::command]
+fn audio_transcribe_development(
+    runtime: String,
+    model_path: String,
+    audio_path: String,
+    timeout_seconds: Option<u32>,
+) -> Result<serde_json::Value, String> {
+    let mut arguments = vec![
+        "audio-transcribe".to_owned(),
+        "--audio-runtime".to_owned(),
+        runtime,
+        "--audio-model".to_owned(),
+        model_path,
+        "--audio-path".to_owned(),
+        audio_path,
+    ];
+    if let Some(value) = timeout_seconds {
+        arguments.extend(["--timeout-seconds".to_owned(), value.to_string()]);
+    }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
 fn rag_ingest_development(
     source_uri: String,
     source_label: String,
@@ -1504,6 +1526,7 @@ fn main() {
             image_runtime_health_development,
             image_runtime_submit_development,
             image_runtime_history_development,
+            audio_transcribe_development,
             rag_ingest_development,
             rag_search_development,
             rag_evaluate_development,

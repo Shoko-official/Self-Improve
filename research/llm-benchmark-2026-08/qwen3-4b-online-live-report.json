@@ -1,0 +1,30 @@
+{
+  "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3-4B-GGUF\\Qwen3-4B-Q4_K_M.gguf",
+  "runtime": "shoko-gguf",
+  "source_count": 3,
+  "latency_ms": 27381.34,
+  "sources": [
+    {
+      "title": "Python 3.14.7 Documentation",
+      "url": "https://docs.python.org/3.14/",
+      "facts": "The official docs page is for Python 3.14.7 and links to What's New in Python 3.14."
+    },
+    {
+      "title": "Python 3.14.0 Release",
+      "url": "https://www.python.org/downloads/release/python-3140/",
+      "facts": "Python 3.14.0 is a major release with new features and optimisations; official macOS and Windows binaries include an experimental JIT compiler."
+    },
+    {
+      "title": "PyPA Dependency Groups Specification",
+      "url": "https://packaging.python.org/en/latest/specifications/dependency-groups/",
+      "facts": "Dependency groups store package requirements in pyproject.toml without including them in built project metadata. Groups can include other groups."
+    }
+  ],
+  "output": "**Verified Facts**  \n- The official documentation for Python 3.14.7 is available at [https://docs.python.org/3.14/](https://docs.python.org/3.14/), and it includes a section on What's New in Python 3.14.  \n- Python 3.14.0 is a major release that includes new features and optimisations, with experimental JIT compiler support on macOS and Windows [https://www.python.org/downloads/release/python-3140/](https://www.python.org/downloads/release/python-3140/).  \n- The PyPA Dependency Groups Specification outlines how package requirements can be stored in `pyproject.toml` without being included in built project metadata, with the ability for groups to include other groups [https://packaging.python.org/en/latest/specifications/dependency-groups/](https://packaging.python.org/en/latest/specifications/dependency-groups/).  \n\n**Source-Specific Caveats**  \n- The documentation for Python 3.14.7 may not be fully updated or may have limited content compared to newer versions.  \n- The information about Python 3.14.0 being a major release with experimental JIT compiler support is based on release notes and may not reflect the current state of the compiler.  \n- The PyPA Dependency Groups Specification is a technical document and may not be directly applicable to all project configurations or build systems.  \n\n**Practical Implication for a Python Project**  \n- For a project using Python 3.14.7, developers should refer to the official documentation for detailed information on new features and changes.  \n- If using Python 3.14.0, the experimental JIT compiler could be a valuable optimization for performance-critical applications, though its stability and reliability should be monitored.  \n- For managing dependencies, the PyPA Dependency Groups Specification can help structure `pyproject.toml` files for better organisation and clarity, especially in larger projects.  \n\n**Confidence Note**  \n- The facts provided are based on the source records and are considered reliable for the specific information given. However, the information about Python 3.14.0 and its JIT compiler is experimental and may not be stable for production use. The PyPA Dependency Groups Specification is a well-documented standard but may require additional context for full implementation.",
+  "checks": {
+    "all_urls_present": true,
+    "caveat_section": true,
+    "confidence_section": true,
+    "no_external_browse_claim": true
+  }
+}
