@@ -1,0 +1,18 @@
+{
+  "errors": [],
+  "warnings": [
+    "Aucune prochaine meilleure action dans l’état interne"
+  ],
+  "counts": {
+    "sources": 0,
+    "claims": 0,
+    "predictions": 0
+  },
+  "git_hygiene": {
+    "repo_detected": true,
+    "internal_root": "F:\\Code\\AI_ML\\HermesGUI\\.research-loop\\llm-benchmark-2026-08-e077ef18",
+    "ignore_source": ".git/info/exclude:8:/.research-loop/\t\"F:\\\\Code\\\\AI_ML\\\\HermesGUI\\\\.research-loop\\\\llm-benchmark-2026-08-e077ef18\"",
+    "shared_gitignore_rules": []
+  },
+  "pass": true
+}

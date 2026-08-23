@@ -6,6 +6,8 @@ import json
 import os
 from pathlib import Path
 
+from verify_generated_outputs import verify_bug_fix, verify_code_generation
+
 
 def contains(text: str, *needles: str) -> bool:
     lowered = text.lower()
@@ -19,9 +21,11 @@ def audit(task: dict[str, object]) -> dict[str, object]:
     if family == "research":
         checks = {"evidence_a": "Evidence A" in text, "evidence_b": "Evidence B" in text, "limitation": contains(text, "limitation"), "uncertainty": contains(text, "unknown", "not")}
     elif family == "code":
-        checks = {"function": "def top_k" in text, "pytest": "pytest" in text, "empty_test": contains(text, "empty", "test"), "boundary": contains(text, "k <= 0")}
+        execution = verify_code_generation(text)
+        checks = {"function": "def top_k" in text, "pytest": "pytest" in text, "empty_test": contains(text, "empty", "test"), "boundary": contains(text, "k <= 0"), "execution": bool(execution.get("passed"))}
     elif family == "bug-fix":
-        checks = {"empty_error": contains(text, "ValueError", "empty"), "type_error": contains(text, "TypeError", "non-numeric"), "regression_tests": contains(text, "Regression Tests"), "no_fallback": contains(text, "does not silently")}
+        execution = verify_bug_fix(text)
+        checks = {"empty_error": contains(text, "ValueError", "empty"), "type_error": contains(text, "TypeError", "non-numeric"), "regression_tests": contains(text, "Regression Tests"), "no_fallback": contains(text, "does not silently"), "execution": bool(execution.get("passed"))}
     elif family == "agentic-rag":
         checks = {"causal_abstention": contains(text, "insufficient evidence"), "sample_identity": "B-17" in text, "exact_source_interval": "[source:lab-notes.md:73-121]" in text, "no_wrong_interval": "[source:lab-notes.md:0-72]" not in text}
     elif family == "reasoning":

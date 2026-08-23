@@ -1,5 +1,5 @@
 {
-  "source": "F:\\Code\\AI_ML\\HermesGUI\\research\\llm-benchmark-2026-08\\qwen3-4b-complete-output-report.json",
+  "source": "research\\llm-benchmark-2026-08\\qwen3-4b-complete-output-report.json",
   "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3-4B-GGUF\\Qwen3-4B-Q4_K_M.gguf",
   "variant": "complete-output",
   "tasks": [
@@ -23,11 +23,12 @@
         "function": true,
         "pytest": true,
         "empty_test": true,
-        "boundary": true
+        "boundary": true,
+        "execution": false
       },
       "hits": 4,
-      "total": 4,
-      "fraction": 1.0
+      "total": 5,
+      "fraction": 0.8
     },
     {
       "id": "bug-fix",
@@ -36,10 +37,11 @@
         "empty_error": true,
         "type_error": true,
         "regression_tests": true,
-        "no_fallback": true
+        "no_fallback": true,
+        "execution": true
       },
-      "hits": 4,
-      "total": 4,
+      "hits": 5,
+      "total": 5,
       "fraction": 1.0
     },
     {
@@ -81,5 +83,5 @@
       "fraction": 0.3333333333333333
     }
   ],
-  "macro_fraction": 0.8055555555555555
+  "macro_fraction": 0.7722222222222223
 }
