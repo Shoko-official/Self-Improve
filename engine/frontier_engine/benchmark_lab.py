@@ -145,7 +145,7 @@ def list_benchmark_runs(root: Path) -> dict[str, object]:
     for path in sorted(directory.glob("*.json"), reverse=True) if directory.is_dir() else ():
         try:
             report = json.loads(path.read_text(encoding="utf-8"))
-            reports.append({"run_id": report.get("run_id", path.stem), "status": report.get("status", "unknown"), "model": report.get("model"), "variant": report.get("variant"), "completed_at": report.get("completed_at"), "report_path": str(path), "macro_fraction": sum(float(item.get("rubric", {}).get("fraction", 0)) for item in report.get("tasks", [])) / max(1, sum(1 for item in report.get("tasks", []) if item.get("rubric")))})
+            reports.append({"run_id": report.get("run_id", path.stem), "status": report.get("status", "unknown"), "model": report.get("model"), "variant": report.get("variant"), "completed_at": report.get("completed_at"), "report_path": str(path), "macro_fraction": sum(float(item.get("rubric", {}).get("fraction", 0)) for item in report.get("tasks", [])) / max(1, sum(1 for item in report.get("tasks", []) if item.get("rubric"))), "latency_ms": sum(float(item.get("latency_ms", 0)) for item in report.get("tasks", []))})
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             continue
     return {"runs": reports}
