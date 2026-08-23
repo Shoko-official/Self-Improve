@@ -1,0 +1,139 @@
+{
+  "environment": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "runtime": "b10517"
+  },
+  "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.5-9B-GGUF\\Qwen3.5-9B-Q6_K.gguf",
+  "variant": "qwen35-9b",
+  "max_tokens": 768,
+  "tasks": [
+    {
+      "id": "research-synthesis",
+      "family": "research",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.5-9B-GGUF\\Qwen3.5-9B-Q6_K.gguf",
+      "runtime": "b10517",
+      "variant": "qwen35-9b",
+      "max_tokens": 768,
+      "latency_ms": 51143.46,
+      "output": "### Conclusions (Observations)\n*   **Latency Reduction:** The protocol successfully reduced median latency from 220 ms to 160 ms during the testing phase. (Evidence A)\n*   **Trial Volume:** The results were derived from a total of 30 local trials. (Evidence A)\n\n### Conclusions (Inferences)\n*   **Environment Specificity:** The performance improvement was observed specifically on a single Windows host. (Evidence B)\n*   **Scope of Validation:** The protocol's effectiveness was not validated against external or unseen workloads. (Evidence B)\n\n### Limitation\n*   The study lacks statistical robustness due to a small sample size (only 30 trials) and the absence of a held-out workload, which prevents generalization to other systems or diverse task sets. (Evidence A, Evidence B)",
+      "failure": null,
+      "rubric": {
+        "hits": 3,
+        "checks": 4,
+        "matched": [
+          "Evidence A",
+          "Evidence B",
+          "limitation"
+        ],
+        "fraction": 0.75
+      }
+    },
+    {
+      "id": "code-generation",
+      "family": "code",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.5-9B-GGUF\\Qwen3.5-9B-Q6_K.gguf",
+      "runtime": "b10517",
+      "variant": "qwen35-9b",
+      "max_tokens": 768,
+      "latency_ms": 51360.91,
+      "output": "```python\ndef top_k(values, k):\n    \"\"\"\n    Returns the k largest values from `values` in descending order.\n    \n    Behavior:\n      - If k <= 0: returns an empty list.\n      - If k > len(values): returns all values sorted in descending order.\n      - Otherwise: returns the k largest values sorted in descending order.\n    \"\"\"\n    if k <= 0:\n        return []\n    \n    n = len(values)\n    if k >= n:\n        return sorted(values, reverse=True)\n    \n    # Use a min-heap of size k to efficiently find the k largest elements\n    import heapq\n    heap = []\n    \n    for x in values:\n        if len(heap) < k:\n            heapq.heappush(heap, x)\n        elif x > heap[0]:\n            heapq.heapreplace(heap, x)\n    \n    # Extract elements and sort in descending order\n    return sorted(heap, reverse=True)\n```\n\n### Pytest Tests\n\n```python\nimport pytest\n\ndef test_top_k_normal():\n    \"\"\"Test standard case with k < len(values)\"\"\"\n    assert top_k([3, 1, 4, 1, 5, 9, 2, 6], 3) == [9, 6, 5]\n\ndef test_top_k_empty_input():\n    \"\"\"Test with empty input list\"\"\"\n    assert top_k([], 5) == []\n    assert top_k([], 0) == []\n\ndef test_top_k_k_zero_or_negative():\n    \"\"\"Test with k <= 0\"\"\"\n    assert top_k([1, 2, 3], 0) == []\n    assert top_k([1, 2, 3], -1) == []\n```",
+      "failure": null,
+      "rubric": {
+        "hits": 4,
+        "checks": 4,
+        "matched": [
+          "def top_k",
+          "pytest",
+          "empty",
+          "k <= 0"
+        ],
+        "fraction": 1.0
+      }
+    },
+    {
+      "id": "bug-fix",
+      "family": "bug-fix",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.5-9B-GGUF\\Qwen3.5-9B-Q6_K.gguf",
+      "runtime": "b10517",
+      "variant": "qwen35-9b",
+      "max_tokens": 768,
+      "latency_ms": 92709.75,
+      "output": "### Bug Analysis\n\nThe function `average(xs)` has two distinct failure modes:\n1.  **RuntimeError**: When called with an empty list, `len(xs)` is 0. Division by zero raises a `ZeroDivisionError`. While the prompt mentions `RuntimeError`, the specific exception in Python is `ZeroDivisionError`, which is unhelpful without context.\n2.  **TypeError**: When called with non-numeric values (e.g., strings or lists), `sum()` may succeed (summing strings) or fail, and `/` will eventually raise a `TypeError` that is difficult to debug because it happens deep in the arithmetic logic rather than at the input validation stage.\n\n**Failure Mode Explanation**:\nThe function assumes the input is a non-empty collection of numbers. It lacks any **pre-condition checks**. When assumptions are violated:\n-   Empty input leads to a division-by-zero crash.\n-   Non-numeric input leads to a type mismatch during summation or division, resulting in a generic `TypeError` that doesn't explicitly state \"average requires numbers.\"\n\n### Proposed Fix\n\nThe fix involves adding explicit validation at the start of the function:\n1.  Check if the list is empty and raise a `ValueError` with a clear message if so.\n2.  Check if the list contains non-numeric items and raise a `TypeError` with a clear message if so.\n\nThis ensures the error is caught immediately with a helpful explanation, rather than failing silently or deep inside the arithmetic logic.\n\n```python\ndef average(xs):\n    if not xs:\n        raise ValueError(\"Cannot calculate average of an empty list.\")\n    \n    # Check if all elements are numbers (int or float)\n    if not all(isinstance(x, (int, float)) for x in xs):\n        raise TypeError(\"All elements must be numeric.\")\n        \n    return sum(xs) / len(xs)\n```\n\n### Regression Tests\n\nHere are the tests verifying the behavior for empty input, valid input, and non-numeric input.\n\n```python\nimport pytest\n\ndef test_average_valid_input():\n    \"\"\"Test that valid numeric lists return the correct average.\"\"\"\n    assert average([1, 2, 3, 4, 5]) == 3.0\n    assert average([10.5, 20.5]) == 15.5\n    assert average([42]) == 42.0\n    assert average([-1, -2, -3]) == -2.0\n\ndef test_average_empty_list():\n    \"\"\"Test that an empty list raises a ValueError with a descriptive message.\"\"\"\n    try:\n        average([])\n        assert False, \"Expected ValueError to be raised\"\n    except ValueError as e:\n        assert \"empty\" in str(e).lower()\n\ndef test_average_non_numeric_values():\n    \"\"\"Test that a list with non-numeric values raises a TypeError.\"\"\"\n    # Mixed types\n    try:\n        average([1, 2, \"three\", 4])\n        assert False, \"Expected TypeError to be raised\"\n    except TypeError as e:\n        assert \"numeric\" in str(e).lower() or \"number\" in str(e).lower()\n    \n    # All strings\n    try:\n        average([\"a\", \"b\", \"c\"])\n        assert False, \"Expected TypeError to be raised\"\n    except TypeError as e:\n        assert \"numeric\" in str(e).lower() or \"number\" in str(e).lower()\n\n    # Nested lists (which are iterable but not numbers)\n    try:\n        average([[1, ",
+      "failure": null,
+      "rubric": {
+        "hits": 4,
+        "checks": 4,
+        "matched": [
+          "empty",
+          "regression",
+          "non-numeric",
+          "raise"
+        ],
+        "fraction": 1.0
+      }
+    },
+    {
+      "id": "agentic-rag",
+      "family": "agentic-rag",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.5-9B-GGUF\\Qwen3.5-9B-Q6_K.gguf",
+      "runtime": "b10517",
+      "variant": "qwen35-9b",
+      "max_tokens": 768,
+      "latency_ms": 16292.68,
+      "output": "No, the buffer exchange is not proven to cause the signal increase, as the notes state no causal control was run [source:lab-notes.md:0-72]; the sample recorded was identified by barcode B-17 [source:lab-notes.md:73-121].",
+      "failure": null,
+      "rubric": {
+        "hits": 3,
+        "checks": 4,
+        "matched": [
+          "[source:",
+          "B-17",
+          "control"
+        ],
+        "fraction": 0.75
+      }
+    },
+    {
+      "id": "complex-reasoning",
+      "family": "reasoning",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.5-9B-GGUF\\Qwen3.5-9B-Q6_K.gguf",
+      "runtime": "b10517",
+      "variant": "qwen35-9b",
+      "max_tokens": 768,
+      "latency_ms": 93212.53,
+      "output": "### Step-by-Step Deduction\n\nTo find the earliest completion time, we must analyze the dependencies and constraints between the three stages (A, B, and C). Let $t$ represent time in seconds from the start ($t=0$).\n\n**1. Analyze Stage Constraints:**\n\n*   **Stage A:**\n    *   Total duration: 18 seconds.\n    *   Standard execution window: $[0, 18]$.\n    *   **Overlap Constraint:** It can overlap with B *only after* its first 6 seconds. This means Stage A occupies a resource for Stage B during the interval $[0, 6]$. Stage B cannot run until Stage A has finished the portion $[0, 6]$. Effectively, Stage B can start no earlier than $t=6$.\n\n*   **Stage B:**\n    *   Total duration: 20 seconds.\n    *   **Dependency:** Can start after A releases its lock (at $t=6$).\n    *   **Overlap Constraint:** Stage C starts after B. This implies Stage B and Stage C are serially dependent (B must finish before C starts), or they share a resource such that C cannot begin until B is done. The phrasing \"starts after B\" confirms $Start(C) \\ge End(B)$.\n\n*   **Stage C:**\n    *   Total duration: 12 seconds.\n    *   **Dependency:** Starts after B finishes.\n\n**2. Calculate Timeline:**\n\n*   **Start Time:** $t = 0$.\n*   **Stage A Execution:**\n    *   Starts at $t=0$.\n    *   Occupies the critical resource for B during $[0, 6]$.\n    *   Continues running until $t=18$.\n    *   *Note:* Even though A continues until 18, the constraint specifically regarding the overlap with B is resolved at $t=6$. B is free to start at $t=6$, assuming no other bottlenecks exist for B specifically.\n\n*   **Stage B Execution:**\n    *   Earliest Start: $t = 6$ (due to A's initial 6-second lock).\n    *   Duration: 20 seconds.\n    *   End Time: $6 + 20 = 26$.\n    *   *Verification of overlap:* Does B finish before C needs to start? Yes, C waits for B. Does A finish before C needs to start? No, but A's constraint on B is satisfied at $t=6$. The fact that A runs until $t=18$ does not block B, as the constraint was \"after its first 6 seconds,\" implying the rest of A's time is independent of B.\n\n*   **Stage C Execution:**\n    *   Earliest Start: $t = 26$ (immediately after B finishes).\n    *   Duration: 12 seconds.\n    *   End Time: $26 + 12 = 38$.\n\n**3. Determine Completion Time:**\nThe pipeline is complete when the last stage (C) finishes.\n$T_{complete} = 38$ seconds.\n\n**4. Identify Overlap Interval:**\nThe problem states A overlaps with B only after A's first 6 seconds.\n*   A runs: $[0, 18]$\n*   B runs: $[6, 26]$\n*   **Overlap Interval:** The period where both A and B are active simultaneously is $[6, 18]",
+      "failure": null,
+      "rubric": {
+        "hits": 1,
+        "checks": 3,
+        "matched": [
+          "6"
+        ],
+        "fraction": 0.3333333333333333
+      }
+    },
+    {
+      "id": "online-research-discipline",
+      "family": "online-research",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.5-9B-GGUF\\Qwen3.5-9B-Q6_K.gguf",
+      "runtime": "b10517",
+      "variant": "qwen35-9b",
+      "max_tokens": 768,
+      "latency_ms": 55152.87,
+      "output": "### Missing Components\nTo function as an effective online research agent, the following critical inputs are currently absent:\n1.  **Specific Research Query**: There is no defined question, topic, or problem statement to investigate (e.g., \"What was the GDP growth of Japan in 2023?\" or \"Summarize recent developments in CRISPR therapy\").\n2.  **Search Capabilities**: No browser, search engine API access, or live internet tool has been provided to retrieve real-time data or verify facts.\n3.  **Source Documents**: No pre-existing text, PDFs, URLs, or datasets are available for analysis or grounding.\n\n### Constraint Adherence\nPer your instructions, I am **abstaining** from making any current factual claims, as I cannot verify information without the necessary tools or a specific topic to investigate.\n\n### Proposed Search Plan\nOnce a query is provided, the following reproducible plan will be executed:\n\n1.  **Initial Broad Search**: Conduct general web searches using relevant keywords to identify current events, consensus views, and key entities.\n    *   *Action*: Query major search engines with the user's prompt.\n2.  **Targeted Verification**: Run follow-up queries specifically targeting authoritative sources (e.g., government statistics, peer-reviewed journals, established news outlets) to cross-reference initial findings.\n3.  **Synthesis**: Compile verified information into a coherent summary, explicitly distinguishing between established facts, conflicting reports, and data requiring further investigation.\n\n### Source Quality Checks\nTo ensure accuracy, the following criteria will be applied to any retrieved sources:\n*   **Authority**: Is the publisher a recognized expert organization, government body, academic institution, or reputable news outlet?\n*   **Currency**: Is the information up-to-date relative to the topic's timeframe? (Crucial for dynamic fields like technology or finance).\n*   **Corroboration**: Are multiple independent sources reporting the same fact?\n*   **Bias Assessment**: Is the content presented objectively, or does it reflect a clear ideological or commercial agenda?\n*   **Citation Transparency**: Does the source provide links to primary data or verifiable references?",
+      "failure": null,
+      "rubric": {
+        "hits": 4,
+        "checks": 4,
+        "matched": [
+          "cannot",
+          "source",
+          "search",
+          "current"
+        ],
+        "fraction": 1.0
+      }
+    }
+  ]
+}

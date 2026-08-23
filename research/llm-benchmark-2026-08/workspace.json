@@ -1,0 +1,9 @@
+{
+  "schema_version": "2.0",
+  "workspace_id": "llm-benchmark-2026-08-e077ef18",
+  "topic": "Real local Shoko's LLM benchmark across research, code, bug fixing, agentic RAG, reasoning, and online research",
+  "profile": "frontier",
+  "created_at": "2026-08-23T22:28:57.910149+00:00",
+  "internal_namespace": ".research-loop/llm-benchmark-2026-08-e077ef18",
+  "git_root_relative": true
+}

@@ -1,0 +1,85 @@
+{
+  "source": "research\\llm-benchmark-2026-08\\qwen3-4b-qwen35-9b-report.json",
+  "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.5-9B-GGUF\\Qwen3.5-9B-Q6_K.gguf",
+  "variant": "qwen35-9b",
+  "tasks": [
+    {
+      "id": "research-synthesis",
+      "family": "research",
+      "checks": {
+        "evidence_a": true,
+        "evidence_b": true,
+        "limitation": true,
+        "uncertainty": false
+      },
+      "hits": 3,
+      "total": 4,
+      "fraction": 0.75
+    },
+    {
+      "id": "code-generation",
+      "family": "code",
+      "checks": {
+        "function": true,
+        "pytest": true,
+        "empty_test": true,
+        "boundary": true
+      },
+      "hits": 4,
+      "total": 4,
+      "fraction": 1.0
+    },
+    {
+      "id": "bug-fix",
+      "family": "bug-fix",
+      "checks": {
+        "empty_error": true,
+        "type_error": true,
+        "regression_tests": true,
+        "no_fallback": false
+      },
+      "hits": 3,
+      "total": 4,
+      "fraction": 0.75
+    },
+    {
+      "id": "agentic-rag",
+      "family": "agentic-rag",
+      "checks": {
+        "causal_abstention": false,
+        "sample_identity": true,
+        "exact_source_interval": true,
+        "no_wrong_interval": false
+      },
+      "hits": 2,
+      "total": 4,
+      "fraction": 0.5
+    },
+    {
+      "id": "complex-reasoning",
+      "family": "reasoning",
+      "checks": {
+        "answer": false,
+        "overlap": false,
+        "arithmetic": true,
+        "constraint_check": true
+      },
+      "hits": 2,
+      "total": 4,
+      "fraction": 0.5
+    },
+    {
+      "id": "online-research-discipline",
+      "family": "online-research",
+      "checks": {
+        "no_current_claim": true,
+        "source_plan": true,
+        "quality_checks": false
+      },
+      "hits": 2,
+      "total": 3,
+      "fraction": 0.6666666666666666
+    }
+  ],
+  "macro_fraction": 0.6944444444444445
+}
