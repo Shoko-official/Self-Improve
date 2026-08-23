@@ -1,4 +1,5 @@
 import hashlib
+import os
 import tempfile
 import unittest
 import zipfile
@@ -48,14 +49,15 @@ class ManagedGgufTests(unittest.TestCase):
     def test_canonical_llama_binaries_win_when_unified_wrapper_is_present(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            (root / "shoko-llama.exe").write_bytes(b"wrapper")
-            (root / "llama-cli.exe").write_bytes(b"cli")
-            (root / "llama-server.exe").write_bytes(b"server")
-            self.assertEqual(_find_executable(root).name, "llama-cli.exe")
-            self.assertEqual(_find_server(root).name, "llama-server.exe")
+            suffix = ".exe" if os.name == "nt" else ""
+            (root / f"shoko-llama{suffix}").write_bytes(b"wrapper")
+            (root / f"llama-cli{suffix}").write_bytes(b"cli")
+            (root / f"llama-server{suffix}").write_bytes(b"server")
+            self.assertEqual(_find_executable(root).name, f"llama-cli{suffix}")
+            self.assertEqual(_find_server(root).name, f"llama-server{suffix}")
 
     def test_runtime_probe_uses_bundle_directory_for_dll_resolution(self) -> None:
         with tempfile.TemporaryDirectory() as directory, patch("frontier_engine.managed_gguf.subprocess.run") as run:
-            root = Path(directory); bundle = root / "runtimes" / "shoko-gguf" / "b10517"; bundle.mkdir(parents=True); executable = bundle / "llama-cli.exe"; executable.write_bytes(b"fixture"); run.return_value.returncode = 0
+            root = Path(directory); bundle = root / "runtimes" / "shoko-gguf" / "b10517"; bundle.mkdir(parents=True); suffix = ".exe" if os.name == "nt" else ""; executable = bundle / f"llama-cli{suffix}"; executable.write_bytes(b"fixture"); run.return_value.returncode = 0
             self.assertTrue(probe_managed_gguf(root)["available"])
             self.assertEqual(run.call_args.kwargs["cwd"], bundle)
