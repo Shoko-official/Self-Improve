@@ -228,6 +228,29 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .markdown-body th { background: var(--subtle-bg); font-weight: 650; }
 .markdown-body img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 9px; }
 .markdown-body hr { height: 1px; margin: 1.5em 0; background: var(--border); border: 0; }
+.benchmark-form { max-width: 760px; grid-template-columns: minmax(0, 2fr) minmax(120px, .7fr) minmax(140px, 1fr) auto; align-items: end; }
+.benchmark-form label { min-width: 0; }
+.benchmark-form select, .benchmark-form input { width: 100%; }
+.benchmark-report, .benchmark-history { max-width: 760px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
+.benchmark-report .activity-heading { align-items: flex-start; }
+.benchmark-report .activity-heading h3, .benchmark-report .activity-heading p { margin: 0; }
+.benchmark-report .activity-heading p { margin-top: 4px; color: var(--text-soft); font-size: 11px; }
+.benchmark-task-list { display: grid; gap: 6px; margin-top: 12px; }
+.benchmark-task { background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 8px; }
+.benchmark-task summary { display: grid; grid-template-columns: minmax(0, 1fr) auto 75px; gap: 10px; align-items: center; padding: 9px 10px; cursor: pointer; list-style: none; }
+.benchmark-task summary::-webkit-details-marker { display: none; }
+.benchmark-task summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.benchmark-task summary strong { font-size: 11px; }
+.benchmark-task summary small { color: var(--text-faint); text-align: right; }
+.benchmark-task > p { margin: 0; padding: 0 10px 8px; color: var(--text-soft); font-size: 11px; }
+.benchmark-output { max-height: 260px; margin: 0 10px 10px; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-soft); background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; font: 10px/1.45 ui-monospace, "Cascadia Code", monospace; }
+.benchmark-path { margin: 10px 0 0; color: var(--text-faint); font: 10px ui-monospace, "Cascadia Code", monospace; overflow-wrap: anywhere; }
+.benchmark-history { display: grid; gap: 6px; }
+.benchmark-history .activity-heading { margin-bottom: 2px; }
+.benchmark-history .activity-heading h3 { margin: 0; font-size: 13px; }
+.benchmark-history-row { width: 100%; justify-content: space-between; gap: 12px; padding: 8px 10px; color: var(--text-soft); background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 7px; text-align: left; }
+.benchmark-history-row strong { color: var(--text); font-size: 11px; }
+@media (max-width: 1100px) { .benchmark-form { grid-template-columns: 1fr 1fr; } .benchmark-form label:first-child { grid-column: 1 / -1; } }
 .artifact-surface { align-content: start; }
 .artifact-preview { margin-top: 18px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }
 .artifact-preview > header, .artifact-preview > footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 13px; background: var(--subtle-bg); color: var(--text-faint); font-size: 11px; }

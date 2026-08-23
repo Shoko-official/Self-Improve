@@ -1,0 +1,87 @@
+{
+  "source": "research\\llm-benchmark-2026-08\\qwen3-4b-qwen36-35b-deep-report.json",
+  "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\Qwen3.6-35B-A3B-GGUF\\Qwen3.6-35B-A3B-Q4_K_M.gguf",
+  "variant": "qwen36-35b-deep",
+  "tasks": [
+    {
+      "id": "research-synthesis",
+      "family": "research",
+      "checks": {
+        "evidence_a": true,
+        "evidence_b": true,
+        "limitation": true,
+        "uncertainty": true
+      },
+      "hits": 4,
+      "total": 4,
+      "fraction": 1.0
+    },
+    {
+      "id": "code-generation",
+      "family": "code",
+      "checks": {
+        "function": true,
+        "pytest": false,
+        "empty_test": false,
+        "boundary": true,
+        "execution": true
+      },
+      "hits": 3,
+      "total": 5,
+      "fraction": 0.6
+    },
+    {
+      "id": "bug-fix",
+      "family": "bug-fix",
+      "checks": {
+        "empty_error": true,
+        "type_error": true,
+        "regression_tests": false,
+        "no_fallback": false,
+        "execution": true
+      },
+      "hits": 3,
+      "total": 5,
+      "fraction": 0.6
+    },
+    {
+      "id": "agentic-rag",
+      "family": "agentic-rag",
+      "checks": {
+        "causal_abstention": false,
+        "sample_identity": true,
+        "exact_source_interval": true,
+        "no_wrong_interval": false
+      },
+      "hits": 2,
+      "total": 4,
+      "fraction": 0.5
+    },
+    {
+      "id": "complex-reasoning",
+      "family": "reasoning",
+      "checks": {
+        "answer": false,
+        "overlap": false,
+        "arithmetic": false,
+        "constraint_check": false
+      },
+      "hits": 0,
+      "total": 4,
+      "fraction": 0.0
+    },
+    {
+      "id": "online-research-discipline",
+      "family": "online-research",
+      "checks": {
+        "no_current_claim": false,
+        "source_plan": true,
+        "quality_checks": false
+      },
+      "hits": 1,
+      "total": 3,
+      "fraction": 0.3333333333333333
+    }
+  ],
+  "macro_fraction": 0.5055555555555555
+}

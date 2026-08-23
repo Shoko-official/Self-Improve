@@ -61,12 +61,15 @@ type ArtifactVersion = { id: string; version: number; content_hash: string; exec
 type EnvironmentRecord = { name: string; language: string; executable: string | null; python_version: string | null; runtime_version?: string | null; package_fingerprint: string | null; packages: Record<string, string>; };
 type AgentActivity = { project_id: string; plan: string | null; plan_state: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string }; result: { error?: string; output_chars?: number } }>; };
 type LocalModelCatalog = { shoko_gguf: { available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean }; ollama: { available: boolean; models: string[]; reason?: string }; lm_studio_library: { available: boolean; models_root: string; models: Array<{ key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string }> }; registered_models: Array<{ path: string; capability_state: string }> };
+type BenchmarkTask = { id: string; family: string; model: string; runtime: string; max_tokens: number; latency_ms: number; output: string; failure: string | null; rubric?: { hits: number; total: number; fraction: number; checks: Record<string, boolean> } };
+type BenchmarkReport = { run_id: string; status: string; model: string; variant: string; max_tokens: number; runtime: string; started_at: number; completed_at: number; report_path: string; tasks: BenchmarkTask[] };
+type BenchmarkRunSummary = { run_id: string; status: string; model: string; variant: string; completed_at: number; report_path: string; macro_fraction: number };
 type KernelResult = { project_id: string; execution: { state: string; stdout: string; stderr: string; error?: string }; job: { id: string; state: string; diagnostic: { code: string } | null; events: Array<{ kind: string; created_at: string }> } };
 type FolderGrant = { id: string; path: string; operation: string; revoked_at: string | null };
 type GitContext = { linked: boolean; repository?: boolean; path?: string; branch?: string; changes?: number; status?: string[]; remote?: string | null; reason?: string; ci?: { available: boolean; latest?: { status: string; conclusion: string; name: string; url: string; updatedAt: string } | null; reason?: string } };
 type GitDiff = { linked: boolean; repository?: boolean; path?: string; files?: string[]; preview?: string; truncated?: boolean; scope?: string; reason?: string };
 type ProviderProfile = { kind: "openai-compatible" | "nvidia-nim"; baseUrl: string; credentialHandle: string; models: string[] };
-type Surface = "chat" | "workspaces" | "models" | "science" | "images" | "audio" | "artifacts" | "automations" | "plugins" | "mcp" | "skills" | "extensions" | "compute" | "kernel" | "settings";
+type Surface = "chat" | "workspaces" | "models" | "science" | "images" | "audio" | "artifacts" | "automations" | "plugins" | "mcp" | "skills" | "extensions" | "compute" | "benchmarks" | "kernel" | "settings";
 type Theme = "light" | "dark";
 type NavigationItem = { id: Surface; icon: LucideIcon; en: string; fr: string };
 const providerProfileKey = "frontier-provider-profile";
@@ -85,12 +88,13 @@ const navigation: NavigationItem[] = [
   { id: "skills", icon: Library, en: "Skills", fr: "Skills" },
   { id: "extensions", icon: Puzzle, en: "Extensions", fr: "Extensions" },
   { id: "compute", icon: Cpu, en: "Compute", fr: "Calcul" },
+  { id: "benchmarks", icon: Gauge, en: "Benchmarks", fr: "Benchmarks" },
   { id: "kernel", icon: TerminalSquare, en: "Kernel", fr: "Kernel" },
   { id: "settings", icon: Settings, en: "Settings", fr: "Réglages" },
 ];
 
 export const primaryNavigation = navigation.filter(item => ["chat", "workspaces", "models", "science"].includes(item.id));
-export const secondaryNavigation = navigation.filter(item => ["images", "audio", "artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "kernel"].includes(item.id));
+export const secondaryNavigation = navigation.filter(item => ["images", "audio", "artifacts", "automations", "plugins", "mcp", "skills", "extensions", "compute", "benchmarks", "kernel"].includes(item.id));
 
 export function resolveProjectId(projects: ProjectRecord[], preferredProjectId: string, currentProjectId: string): string {
   if (projects.some(project => project.id === preferredProjectId)) return preferredProjectId;
@@ -319,6 +323,7 @@ export function App() {
             {surface === "skills" && <RegistrySurface kind="skills" language={language} projects={projectRecords} />}
             {surface === "extensions" && <RegistrySurface kind="extensions" language={language} projects={projectRecords} />}
             {surface === "compute" && <ComputeSurface language={language} />}
+            {surface === "benchmarks" && <BenchmarkSurface language={language} />}
             {surface === "kernel" && <KernelSurface projects={projectRecords} />}
             {surface === "settings" && <><SettingsSurface language={language} /><ProviderSettings language={language} /><ProviderEgress language={language} /></>}
           </section>
@@ -380,6 +385,7 @@ const slashCommands: SlashCommand[] = [
   { name: "/models", icon: Boxes, en: "Open model management", fr: "Ouvrir la gestion des modèles", target: "models" },
   { name: "/scheduled", icon: CalendarClock, en: "Open scheduled pipelines", fr: "Ouvrir les pipelines planifiés", target: "automations" },
   { name: "/automations", icon: Workflow, en: "Open local AI pipelines", fr: "Ouvrir les pipelines IA locaux", target: "automations" },
+  { name: "/benchmarks", icon: Gauge, en: "Run verified local model benchmarks", fr: "Lancer les benchmarks locaux vérifiables", target: "benchmarks" },
   { name: "/plugins", icon: Puzzle, en: "Open connected capabilities", fr: "Ouvrir les capacités connectées", target: "plugins" },
   { name: "/mcp", icon: Cable, en: "Inspect MCP connectors", fr: "Inspecter les connecteurs MCP", target: "mcp" },
   { name: "/skills", icon: Library, en: "Inspect installed skills", fr: "Inspecter les skills installés", target: "skills" },
@@ -398,6 +404,7 @@ const slashCommands: SlashCommand[] = [
 const frenchCommandDescriptions: Record<string, string> = {
   "/new": "Effacer le brouillon et la sortie", "/projects": "Ouvrir les projets locaux", "/models": "Ouvrir la gestion des modèles", "/scheduled": "Ouvrir les pipelines planifiés", "/automations": "Ouvrir les pipelines IA locaux", "/plugins": "Ouvrir les capacités connectées", "/mcp": "Inspecter les connecteurs MCP", "/skills": "Inspecter les skills installés", "/extensions": "Inspecter les extensions exécutables", "/science": "Ouvrir l'espace Science", "/fast": "Utiliser le raisonnement rapide", "/deep": "Utiliser le raisonnement approfondi", "/plan": "Préparer un plan explicite avant exécution", "/read": "Limiter l'agent à la lecture", "/ask": "Demander avant les actions protégées", "/full": "Autoriser l'accès complet au projet", "/doctor": "Exécuter le diagnostic du moteur local", "/settings": "Ouvrir les réglages",
 };
+frenchCommandDescriptions["/benchmarks"] = "Lancer les benchmarks locaux vérifiables";
 
 export function ChatSurface({ projects, language, onNavigate, preferredProjectId, onProjectChange }: { projects: ProjectRecord[] | null; language: Language; onNavigate: (surface: Surface) => void; preferredProjectId: string; onProjectChange: (projectId: string) => void }) {
   const activeProjects = projects?.filter(project => project.archived_at === null) ?? [];
@@ -1310,6 +1317,78 @@ export function ArtifactsSurface({ language, onInspectVersion }: { language: Lan
   return <section className="surface artifact-surface"><div className="surface-mark">LINEAGE</div><h2>{title}</h2><p>{copy.description}</p><form className="project-form" onSubmit={event => void submit(event)}><label htmlFor="artifact-project">{copy.createLabel}</label><input id="artifact-project" value={projectId} onChange={event => setProjectId(event.target.value)} placeholder={copy.project} required /><input value={name} onChange={event => setName(event.target.value)} placeholder={copy.result} required /><input value={content} onChange={event => setContent(event.target.value)} placeholder={copy.markdown} /><button className="action" type="submit">{copy.save}</button></form><form className="project-form" onSubmit={event => void search(event)}><label htmlFor="artifact-search">{copy.searchLabel}</label><input id="artifact-search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder={copy.result} required /><button className="minor-action" type="submit">{copy.search}</button></form>{error && <p className="inline-error">{error}</p>}<button className="action" onClick={() => void load()}>{copy.refresh}</button>{searchResults && <Evidence rows={searchResults.length ? searchResults.map(artifact => `${artifact.name} · ${artifact.media_type} · ${copy.latest}${artifact.latest_version ?? copy.unsaved}`) : [copy.noMatches]} />}{artifacts && <div className="workspace-list">{artifacts.map(artifact => <div className="workspace-row" key={artifact.id}><span>{artifact.name}</span><button className="minor-action" onClick={() => void inspect(artifact.id)}>{copy.inspect}</button></div>)}</div>}{versions && <Evidence rows={versions.map(version => `v${version.version}: ${version.content_hash.slice(0, 12)}; ${copy.execution} ${version.execution_log.state ?? "recorded"}`)} />}{preview && <ArtifactPreviewPanel preview={preview} />}</section>;
 }
 function ComputeSurface({ language }: { language: Language }) { const copy = (key: Parameters<typeof operationalText>[1]) => operationalText(language, key); const [jobs, setJobs] = useState<JobRecord[] | null>(null); const [generations, setGenerations] = useState<GenerationRecord[] | null>(null); const [projectId, setProjectId] = useState(""); const [operation, setOperation] = useState("local.inspect"); const [error, setError] = useState<string | null>(null); async function refresh() { setError(null); try { const [jobResult, generationResult] = await Promise.all([invoke<{ jobs: JobRecord[] }>("compute_jobs_development"), invoke<{ generations: GenerationRecord[] }>("local_generations_development")]); setJobs(jobResult.jobs); setGenerations(generationResult.generations); } catch (reason) { setError(reason instanceof Error ? reason.message : copy("computeUnavailable")); } } async function submit(event: FormEvent) { event.preventDefault(); try { await invoke("enqueue_compute_job_development", { projectId, operation }); await refresh(); } catch (reason) { setError(reason instanceof Error ? reason.message : copy("computeUnavailable")); } } async function cancel(jobId: string) { await invoke("cancel_compute_job_development", { jobId }); await refresh(); } async function retry(jobId: string) { await invoke("retry_compute_job_development", { jobId }); await refresh(); } useEffect(() => { void refresh(); }, []); return <section className="surface"><div className="surface-mark">SCHEDULER</div><h2>{jobs ? `${jobs.length} ${language === "fr" ? "tâche durable" : "durable job"}${jobs.length === 1 ? "" : "s"}` : copy("computeUnavailable")}</h2><p>{copy("computeDescription")}</p><form className="project-form" onSubmit={event => void submit(event)}><label htmlFor="job-project">{copy("projectAndOperation")}</label><input id="job-project" value={projectId} onChange={event => setProjectId(event.target.value)} placeholder={copy("projectId")} required /><input value={operation} onChange={event => setOperation(event.target.value)} required /><button className="action" type="submit">{copy("queueJob")}</button></form>{error && <p>{error}</p>}{jobs && <div className="workspace-list">{jobs.length ? jobs.map(job => <div className="workspace-row" key={job.id}><span>{job.operation}: {job.state}</span>{["queued", "running"].includes(job.state) && <button className="minor-action" onClick={() => void cancel(job.id)}>{copy("cancel")}</button>}{["failed", "cancelled"].includes(job.state) && <button className="minor-action" onClick={() => void retry(job.id)}>{copy("retry")}</button>}</div>) : <p>{copy("noJobs")}</p>}</div>}{generations && <div className="workspace-list">{generations.map(generation => <div className="workspace-row" key={generation.id}><span>{generation.runtime}/{generation.model}: {generation.state}; {generation.output || generation.diagnostic?.code || copy("noOutput")}</span>{["queued", "running"].includes(generation.state) && <button className="minor-action" onClick={() => void cancel(generation.job_id)}>{copy("cancel")}</button>}{["failed", "cancelled"].includes(generation.state) && <button className="minor-action" onClick={() => void retry(generation.job_id)}>{copy("retry")}</button>}</div>)}</div>}<button className="action" onClick={() => void refresh()}>{copy("refreshCompute")}</button></section>; }
+function BenchmarkSurface({ language }: { language: Language }) {
+  const [catalog, setCatalog] = useState<LocalModelCatalog | null>(null);
+  const [runs, setRuns] = useState<BenchmarkRunSummary[]>([]);
+  const [report, setReport] = useState<BenchmarkReport | null>(null);
+  const [model, setModel] = useState("");
+  const [maxTokens, setMaxTokens] = useState(256);
+  const [variant, setVariant] = useState("desktop");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    setError(null);
+    try {
+      const [catalogResult, runsResult] = await Promise.all([
+        invoke<LocalModelCatalog>("local_model_catalog_development"),
+        invoke<{ runs: BenchmarkRunSummary[] }>("benchmark_reports_development"),
+      ]);
+      setCatalog(catalogResult);
+      setRuns(runsResult.runs);
+      setModel(current => current || catalogResult.lm_studio_library.models[0]?.path || "");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FR-BENCHMARK-UNAVAILABLE");
+    }
+  }
+
+  async function loadRun(runId: string) {
+    try {
+      setReport(await invoke<BenchmarkReport>("benchmark_reports_development", { runId }));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FR-BENCHMARK-REPORT-FAILED");
+    }
+  }
+
+  async function run(event: FormEvent) {
+    event.preventDefault();
+    if (!model) return;
+    setBusy(true);
+    setError(null);
+    setReport(null);
+    try {
+      const result = await invoke<BenchmarkReport>("benchmark_run_development", { model, maxTokens, variant });
+      setReport(result);
+      await refresh();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FR-BENCHMARK-RUN-FAILED");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  useEffect(() => { void refresh(); }, []);
+  const modelOptions = catalog?.lm_studio_library.models ?? [];
+  const completedTasks = report?.tasks.filter(task => task.failure === null).length ?? 0;
+  const scoredTasks = report?.tasks.filter(task => task.rubric) ?? [];
+  const score = scoredTasks.reduce((sum, task) => sum + (task.rubric?.fraction ?? 0), 0);
+  return <section className="surface benchmark-surface">
+    <div className="surface-mark">BENCHMARK LAB</div>
+    <h2>{language === "fr" ? "Comparer les modèles locaux" : "Compare local models"}</h2>
+    <p>{language === "fr" ? "Six familles, le moteur GGUF Shoko, sorties brutes conservées et audit strict. Un échec reste visible et ne devient jamais un score." : "Six task families, the Shoko GGUF engine, retained raw outputs, and a strict audit. Failures stay visible and never become scores."}</p>
+    <form className="project-form benchmark-form" onSubmit={event => void run(event)}>
+      <label htmlFor="benchmark-model">{language === "fr" ? "Modèle GGUF local" : "Local GGUF model"}<select id="benchmark-model" value={model} onChange={event => setModel(event.target.value)} required disabled={busy}><option value="">{language === "fr" ? "Choisir un modèle détecté" : "Choose a detected model"}</option>{modelOptions.map(item => <option value={item.path} key={item.path}>{item.display_name}</option>)}</select></label>
+      <label htmlFor="benchmark-tokens">{language === "fr" ? "Budget de sortie" : "Output budget"}<input id="benchmark-tokens" type="number" min="64" max="4096" step="64" value={maxTokens} onChange={event => setMaxTokens(Number(event.target.value))} disabled={busy} /></label>
+      <label htmlFor="benchmark-variant">{language === "fr" ? "Étiquette de variante" : "Variant label"}<input id="benchmark-variant" value={variant} onChange={event => setVariant(event.target.value)} maxLength={64} disabled={busy} /></label>
+      <button className="action" type="submit" disabled={busy || !model}>{busy ? (language === "fr" ? "Exécution des six tâches" : "Running six tasks") : (language === "fr" ? "Lancer le benchmark" : "Run benchmark")}</button>
+    </form>
+    {catalog && !catalog.shoko_gguf.available && <p className="inline-error"><CircleAlert size={16} />{catalog.shoko_gguf.reason ?? (language === "fr" ? "Le moteur GGUF Shoko est indisponible." : "The Shoko GGUF engine is unavailable.")}</p>}
+    {error && <p className="inline-error" role="alert"><CircleAlert size={16} />{error}</p>}
+    {report && <section className="benchmark-report"><header className="activity-heading"><Gauge size={16} /><div><h3>{report.status} · {report.variant}</h3><p>{completedTasks}/6 {language === "fr" ? "tâches terminées" : "tasks completed"} · {scoredTasks.length ? `${Math.round(score / scoredTasks.length * 100)}%` : "-"} {language === "fr" ? "score moyen strict" : "strict mean score"}</p></div></header><div className="benchmark-task-list">{report.tasks.map(task => <details className="benchmark-task" key={task.id}><summary><span>{task.family}</span><strong>{task.failure ? (language === "fr" ? "échec" : "failed") : `${Math.round((task.rubric?.fraction ?? 0) * 100)}%`}</strong><small>{task.latency_ms.toFixed(0)} ms</small></summary>{task.failure ? <p className="agent-error">{task.failure}</p> : <><p>{task.rubric?.hits}/{task.rubric?.total} {language === "fr" ? "critères" : "checks"}</p><pre className="benchmark-output">{task.output}</pre></>}</details>)}</div><p className="benchmark-path">{report.report_path}</p></section>}
+    <section className="benchmark-history"><div className="activity-heading"><FileStack size={16} /><h3>{language === "fr" ? "Runs conservés" : "Retained runs"}</h3></div>{runs.length ? runs.slice(0, 8).map(runEntry => <button className="workspace-row benchmark-history-row" type="button" key={runEntry.run_id} onClick={() => void loadRun(runEntry.run_id)}><span>{runEntry.variant} · {runEntry.model.split(/[\\/]/).pop()}</span><strong>{runEntry.status === "complete" ? `${Math.round(runEntry.macro_fraction * 100)}%` : runEntry.status}</strong></button>) : <p>{language === "fr" ? "Aucun run local enregistré." : "No local benchmark run recorded."}</p>}</section>
+  </section>;
+}
+
 function SettingsSurface({ language: interfaceLanguage }: { language: Language }) {
   const copy = (key: Parameters<typeof operationalText>[1]) => operationalText(interfaceLanguage, key);
   const [probe, setProbe] = useState<Record<string, unknown> | null>(null);
