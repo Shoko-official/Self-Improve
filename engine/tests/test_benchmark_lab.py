@@ -34,6 +34,7 @@ class BenchmarkLabTests(unittest.TestCase):
             self.assertEqual(json.loads(report_path.read_text(encoding="utf-8"))["run_id"], report["run_id"])
             listing = list_benchmark_runs(root)["runs"]
             self.assertEqual(listing[0]["run_id"], report["run_id"])
+            self.assertEqual(listing[0]["latency_ms"], sum(item["latency_ms"] for item in report["tasks"]))
 
 
 if __name__ == "__main__":

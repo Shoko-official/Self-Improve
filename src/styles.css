@@ -248,8 +248,13 @@ kbd { padding: 2px 5px; color: var(--text-faint); background: var(--subtle-bg); 
 .benchmark-history { display: grid; gap: 6px; }
 .benchmark-history .activity-heading { margin-bottom: 2px; }
 .benchmark-history .activity-heading h3 { margin: 0; font-size: 13px; }
-.benchmark-history-row { width: 100%; justify-content: space-between; gap: 12px; padding: 8px 10px; color: var(--text-soft); background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 7px; text-align: left; }
+.benchmark-history-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px; color: var(--text-soft); background: var(--subtle-bg); border: 1px solid var(--border); border-radius: 7px; text-align: left; }
+.benchmark-history-open { min-width: 0; display: flex; flex: 1; justify-content: space-between; gap: 12px; padding: 0; color: inherit; background: transparent; border: 0; text-align: left; }
+.benchmark-history-open span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .benchmark-history-row strong { color: var(--text); font-size: 11px; }
+.benchmark-compare-check { display: inline-flex; align-items: center; gap: 5px; color: var(--text-faint); font-size: 10px; white-space: nowrap; }
+.benchmark-comparison { display: grid; grid-template-columns: auto auto auto; gap: 6px 10px; margin-top: 8px; padding: 10px; color: var(--text-soft); background: var(--subtle-bg); border: 1px solid var(--border-strong); border-radius: 7px; font-size: 11px; }
+.benchmark-comparison p { grid-column: 1 / -1; margin: 0; }
 @media (max-width: 1100px) { .benchmark-form { grid-template-columns: 1fr 1fr; } .benchmark-form label:first-child { grid-column: 1 / -1; } }
 .artifact-surface { align-content: start; }
 .artifact-preview { margin-top: 18px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--panel); }

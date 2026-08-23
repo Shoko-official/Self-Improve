@@ -63,7 +63,11 @@ type AgentActivity = { project_id: string; plan: string | null; plan_state: stri
 type LocalModelCatalog = { shoko_gguf: { available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean }; ollama: { available: boolean; models: string[]; reason?: string }; lm_studio_library: { available: boolean; models_root: string; models: Array<{ key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string }> }; registered_models: Array<{ path: string; capability_state: string }> };
 type BenchmarkTask = { id: string; family: string; model: string; runtime: string; max_tokens: number; latency_ms: number; output: string; failure: string | null; rubric?: { hits: number; total: number; fraction: number; checks: Record<string, boolean> } };
 type BenchmarkReport = { run_id: string; status: string; model: string; variant: string; max_tokens: number; runtime: string; started_at: number; completed_at: number; report_path: string; tasks: BenchmarkTask[] };
-type BenchmarkRunSummary = { run_id: string; status: string; model: string; variant: string; completed_at: number; report_path: string; macro_fraction: number };
+type BenchmarkRunSummary = { run_id: string; status: string; model: string; variant: string; completed_at: number; report_path: string; macro_fraction: number; latency_ms: number };
+export function compareBenchmarkRuns(left: BenchmarkRunSummary, right: BenchmarkRunSummary): { valid: boolean; scoreDelta: number; latencyDeltaMs: number | null; reason?: string } {
+  if (left.status !== "complete" || right.status !== "complete") return { valid: false, scoreDelta: 0, latencyDeltaMs: null, reason: "Only complete runs can be compared." };
+  return { valid: true, scoreDelta: right.macro_fraction - left.macro_fraction, latencyDeltaMs: right.latency_ms - left.latency_ms };
+}
 type KernelResult = { project_id: string; execution: { state: string; stdout: string; stderr: string; error?: string }; job: { id: string; state: string; diagnostic: { code: string } | null; events: Array<{ kind: string; created_at: string }> } };
 type FolderGrant = { id: string; path: string; operation: string; revoked_at: string | null };
 type GitContext = { linked: boolean; repository?: boolean; path?: string; branch?: string; changes?: number; status?: string[]; remote?: string | null; reason?: string; ci?: { available: boolean; latest?: { status: string; conclusion: string; name: string; url: string; updatedAt: string } | null; reason?: string } };
@@ -1324,6 +1328,7 @@ function BenchmarkSurface({ language }: { language: Language }) {
   const [model, setModel] = useState("");
   const [maxTokens, setMaxTokens] = useState(256);
   const [variant, setVariant] = useState("desktop");
+  const [compareIds, setCompareIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -1372,6 +1377,11 @@ function BenchmarkSurface({ language }: { language: Language }) {
   const completedTasks = report?.tasks.filter(task => task.failure === null).length ?? 0;
   const scoredTasks = report?.tasks.filter(task => task.rubric) ?? [];
   const score = scoredTasks.reduce((sum, task) => sum + (task.rubric?.fraction ?? 0), 0);
+  const compareRuns = compareIds.map(id => runs.find(runEntry => runEntry.run_id === id)).filter((runEntry): runEntry is BenchmarkRunSummary => Boolean(runEntry));
+  const comparison = compareRuns.length === 2 ? compareBenchmarkRuns(compareRuns[0], compareRuns[1]) : null;
+  function toggleCompare(runId: string) {
+    setCompareIds(current => current.includes(runId) ? current.filter(id => id !== runId) : current.length < 2 ? [...current, runId] : [current[1], runId]);
+  }
   return <section className="surface benchmark-surface">
     <div className="surface-mark">BENCHMARK LAB</div>
     <h2>{language === "fr" ? "Comparer les modèles locaux" : "Compare local models"}</h2>
@@ -1385,7 +1395,7 @@ function BenchmarkSurface({ language }: { language: Language }) {
     {catalog && !catalog.shoko_gguf.available && <p className="inline-error"><CircleAlert size={16} />{catalog.shoko_gguf.reason ?? (language === "fr" ? "Le moteur GGUF Shoko est indisponible." : "The Shoko GGUF engine is unavailable.")}</p>}
     {error && <p className="inline-error" role="alert"><CircleAlert size={16} />{error}</p>}
     {report && <section className="benchmark-report"><header className="activity-heading"><Gauge size={16} /><div><h3>{report.status} · {report.variant}</h3><p>{completedTasks}/6 {language === "fr" ? "tâches terminées" : "tasks completed"} · {scoredTasks.length ? `${Math.round(score / scoredTasks.length * 100)}%` : "-"} {language === "fr" ? "score moyen strict" : "strict mean score"}</p></div></header><div className="benchmark-task-list">{report.tasks.map(task => <details className="benchmark-task" key={task.id}><summary><span>{task.family}</span><strong>{task.failure ? (language === "fr" ? "échec" : "failed") : `${Math.round((task.rubric?.fraction ?? 0) * 100)}%`}</strong><small>{task.latency_ms.toFixed(0)} ms</small></summary>{task.failure ? <p className="agent-error">{task.failure}</p> : <><p>{task.rubric?.hits}/{task.rubric?.total} {language === "fr" ? "critères" : "checks"}</p><pre className="benchmark-output">{task.output}</pre></>}</details>)}</div><p className="benchmark-path">{report.report_path}</p></section>}
-    <section className="benchmark-history"><div className="activity-heading"><FileStack size={16} /><h3>{language === "fr" ? "Runs conservés" : "Retained runs"}</h3></div>{runs.length ? runs.slice(0, 8).map(runEntry => <button className="workspace-row benchmark-history-row" type="button" key={runEntry.run_id} onClick={() => void loadRun(runEntry.run_id)}><span>{runEntry.variant} · {runEntry.model.split(/[\\/]/).pop()}</span><strong>{runEntry.status === "complete" ? `${Math.round(runEntry.macro_fraction * 100)}%` : runEntry.status}</strong></button>) : <p>{language === "fr" ? "Aucun run local enregistré." : "No local benchmark run recorded."}</p>}</section>
+    <section className="benchmark-history"><div className="activity-heading"><FileStack size={16} /><h3>{language === "fr" ? "Runs conservés" : "Retained runs"}</h3><small>{language === "fr" ? "Sélectionnez deux runs pour comparer" : "Select two runs to compare"}</small></div>{runs.length ? runs.slice(0, 8).map(runEntry => <div className="benchmark-history-row" key={runEntry.run_id}><button className="benchmark-history-open" type="button" onClick={() => void loadRun(runEntry.run_id)}><span>{runEntry.variant} · {runEntry.model.split(/[\\/]/).pop()}</span><strong>{runEntry.status === "complete" ? `${Math.round(runEntry.macro_fraction * 100)}%` : runEntry.status}</strong></button><label className="benchmark-compare-check"><input type="checkbox" checked={compareIds.includes(runEntry.run_id)} onChange={() => toggleCompare(runEntry.run_id)} disabled={runEntry.status !== "complete"} />{language === "fr" ? "Comparer" : "Compare"}</label></div>) : <p>{language === "fr" ? "Aucun run local enregistré." : "No local benchmark run recorded."}</p>}{comparison && <div className="benchmark-comparison"><strong>{compareRuns[0].variant}</strong><span>{language === "fr" ? "versus" : "versus"}</span><strong>{compareRuns[1].variant}</strong><p>{language === "fr" ? "Écart de score strict" : "Strict score delta"}: {comparison.scoreDelta >= 0 ? "+" : ""}{(comparison.scoreDelta * 100).toFixed(1)} points</p><p>{language === "fr" ? "Écart de latence" : "Latency delta"}: {comparison.latencyDeltaMs !== null ? `${comparison.latencyDeltaMs >= 0 ? "+" : ""}${comparison.latencyDeltaMs.toFixed(0)} ms` : "-"}</p></div>}</section>
   </section>;
 }
 

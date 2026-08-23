@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ChatSurface, primaryNavigation, resolveProjectId, secondaryNavigation } from "./App";
+import { ChatSurface, compareBenchmarkRuns, primaryNavigation, resolveProjectId, secondaryNavigation } from "./App";
 
 describe("workspace navigation", () => {
   it("keeps the core workflows primary and exposes operational surfaces through tools", () => {
@@ -31,5 +31,17 @@ describe("first chat setup", () => {
 
     expect(html).toContain("Create your first project");
     expect(html).toContain("Open projects");
+  });
+});
+
+describe("benchmark comparison", () => {
+  const base = { run_id: "a", status: "complete", model: "a.gguf", variant: "A", completed_at: 0, report_path: "a.json", macro_fraction: 0.5, latency_ms: 100 };
+
+  it("reports score and latency deltas for complete runs", () => {
+    expect(compareBenchmarkRuns(base, { ...base, run_id: "b", variant: "B", macro_fraction: 0.75, latency_ms: 130 })).toEqual({ valid: true, scoreDelta: 0.25, latencyDeltaMs: 30 });
+  });
+
+  it("rejects incomplete runs", () => {
+    expect(compareBenchmarkRuns(base, { ...base, status: "failed" }).valid).toBe(false);
   });
 });
