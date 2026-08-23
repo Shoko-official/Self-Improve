@@ -47,6 +47,7 @@ from frontier_engine.renderers import render_preview
 from frontier_engine.managed_runtime import verify_bundle
 from frontier_engine.notifications import NotificationStore
 from frontier_engine.image_runtime import ComfyUIAdapter
+from frontier_engine.benchmark_lab import list_benchmark_runs, load_benchmark_report, run_benchmark
 
 
 _BACKGROUND_PROCESSES: dict[int, subprocess.Popen[bytes]] = {}
@@ -154,6 +155,14 @@ def status(root: Path) -> dict[str, object]:
     finally:
         store.close()
     return {"data_root": str(root), "counts": counts, "control_service": _service_status(root)}
+
+
+def benchmark_run(root: Path, model: str, max_tokens: int, variant: str) -> dict[str, object]:
+    return run_benchmark(root, Path(model), max_tokens, variant)
+
+
+def benchmark_reports(root: Path, run_id: str | None = None) -> dict[str, object]:
+    return load_benchmark_report(root, run_id) if run_id else list_benchmark_runs(root)
 
 
 def projects(root: Path) -> dict[str, object]:
@@ -1096,7 +1105,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "image-runtime-health", "image-runtime-submit", "image-runtime-history", "audio-transcribe", "rag-ingest", "rag-search", "rag-evaluate", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "image-runtime-health", "image-runtime-submit", "image-runtime-history", "audio-transcribe", "rag-ingest", "rag-search", "rag-evaluate", "benchmark-run", "benchmark-reports", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1160,8 +1169,11 @@ def main() -> None:
     parser.add_argument("--mcp-tool-name")
     parser.add_argument("--mcp-arguments", default="{}")
     parser.add_argument("--generation-id")
+    parser.add_argument("--run-id")
     parser.add_argument("--runtime")
     parser.add_argument("--model")
+    parser.add_argument("--max-tokens", type=int, default=384)
+    parser.add_argument("--variant", default="desktop")
     parser.add_argument("--provider-kind")
     parser.add_argument("--provider-base-url")
     parser.add_argument("--api-key-env")
@@ -1494,6 +1506,12 @@ def main() -> None:
         if args.cases_json is None:
             parser.error("rag-evaluate requires --cases-json")
         result = rag_evaluate(root, args.cases_json, args.limit, args.embedding_model)
+    elif args.command == "benchmark-run":
+        if args.model is None:
+            parser.error("benchmark-run requires --model")
+        result = benchmark_run(root, args.model, args.max_tokens, args.variant)
+    elif args.command == "benchmark-reports":
+        result = benchmark_reports(root, args.run_id)
     elif args.command == "reference-lmstudio-model":
         if args.path is None:
             parser.error("reference-lmstudio-model requires --path")

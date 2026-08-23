@@ -766,6 +766,34 @@ fn local_model_catalog_development() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
+fn benchmark_run_development(
+    model: String,
+    max_tokens: Option<u32>,
+    variant: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let mut arguments = vec![
+        "benchmark-run".to_owned(),
+        "--model".to_owned(),
+        model,
+        "--max-tokens".to_owned(),
+        max_tokens.unwrap_or(384).to_string(),
+    ];
+    if let Some(variant) = variant {
+        arguments.extend(["--variant".to_owned(), variant]);
+    }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
+fn benchmark_reports_development(run_id: Option<String>) -> Result<serde_json::Value, String> {
+    let mut arguments = vec!["benchmark-reports".to_owned()];
+    if let Some(run_id) = run_id {
+        arguments.extend(["--run-id".to_owned(), run_id]);
+    }
+    run_development_engine(&arguments)
+}
+
+#[tauri::command]
 fn install_shoko_gguf_runtime_development() -> Result<serde_json::Value, String> {
     run_development_engine(&["install-shoko-gguf-runtime".to_owned()])
 }
@@ -1518,6 +1546,8 @@ fn main() {
             install_ollama_model_development,
             lm_studio_library_development,
             local_model_catalog_development,
+            benchmark_run_development,
+            benchmark_reports_development,
             install_shoko_gguf_runtime_development,
             reference_lm_studio_model_development,
             provider_health_development,

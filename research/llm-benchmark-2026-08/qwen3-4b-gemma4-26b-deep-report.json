@@ -1,0 +1,138 @@
+{
+  "environment": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "python": "3.12.10",
+    "runtime": "b10517"
+  },
+  "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\gemma-4-26B-A4B-it-QAT-GGUF\\gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+  "variant": "gemma4-26b-deep",
+  "max_tokens": 256,
+  "tasks": [
+    {
+      "id": "research-synthesis",
+      "family": "research",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\gemma-4-26B-A4B-it-QAT-GGUF\\gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+      "runtime": "b10517",
+      "variant": "gemma4-26b-deep",
+      "max_tokens": 256,
+      "latency_ms": 36003.16,
+      "output": "**Observations**\n*   The protocol reduced median latency from 220 ms to 160 ms over 30 local trials (Evidence A).\n*   The trials were conducted on one Windows host and did not utilize a held-out workload (Evidence B).\n\n**Inferences**\n*   The protocol demonstrated a performance improvement in latency within the tested local environment (Evidence A).\n\n**Unknowns and Limitations**\n*   **Unknown:** The generalizability of the results to other operating systems or hardware configurations is unknown (Evidence B).\n*   **Limitation:** The study lacks a held-out workload to validate results against unseen data (Evidence B).",
+      "failure": null,
+      "rubric": {
+        "hits": 4,
+        "checks": 4,
+        "matched": [
+          "Evidence A",
+          "Evidence B",
+          "unknown",
+          "limitation"
+        ],
+        "fraction": 1.0
+      }
+    },
+    {
+      "id": "code-generation",
+      "family": "code",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\gemma-4-26B-A4B-it-QAT-GGUF\\gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+      "runtime": "b10517",
+      "variant": "gemma4-26b-deep",
+      "max_tokens": 256,
+      "latency_ms": 27654.47,
+      "output": "Here is the implementation and the requested test suite.\n\n### Implementation\n\n```python\ndef top_k(values, k):\n    \"\"\"\n    Returns the k largest values in descending order.\n    \n    Behavior for edge cases:\n    - If k <= 0: Returns an empty list.\n    - If k > len(values): Returns all elements from the input list, \n      sorted in descending order.\n    \"\"\"\n    if k <= 0:\n        return []\n    return sorted(values, reverse=True)[:k]\n```\n\n### Explanation of Behavior\n1.  **`k <= 0`**: The function returns `[]` because a request for zero or negative elements from a collection results in an empty set.\n2.  **`k > len(values)`**: The slice `[:k]` in Python does not raise an error if `k` exceeds the list length; it simply returns all available elements. The result will be the entire list sorted in descending order.\n\n---\n\n### Pytest Suite\n\nTo run these tests, save the code below in a file named `test_top_k.py` and run `pytest test_top_k.py` in",
+      "failure": null,
+      "rubric": {
+        "hits": 4,
+        "checks": 4,
+        "matched": [
+          "def top_k",
+          "pytest",
+          "empty",
+          "k <= 0"
+        ],
+        "fraction": 1.0
+      }
+    },
+    {
+      "id": "bug-fix",
+      "family": "bug-fix",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\gemma-4-26B-A4B-it-QAT-GGUF\\gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+      "runtime": "b10517",
+      "variant": "gemma4-26b-deep",
+      "max_tokens": 256,
+      "latency_ms": 29867.68,
+      "output": "### Bug Analysis\n\nThe current implementation suffers from two primary failure modes:\n\n1.  **`ZeroDivisionError` (Empty Input):** When `xs` is an empty list, `len(xs)` is `0`. Dividing by zero raises a `ZeroDivisionError`. This occurs before any type validation can take place.\n2.  **`TypeError` (Non-numeric Input):** If the list contains non-numeric values (e.g., `[1, 'a']`), the `sum()` function will attempt to add an integer to a string. This raises a `TypeError`. This is \"confusing\" because the error might manifest deep within the `sum` implementation rather than at the function call site, making it harder to debug in larger systems.\n\n### Proposed Fix\n\nTo fix these issues without using \"fallback\" values (like returning `0` or `None`), we should explicitly check for an empty input to provide a clear error message and ensure the input is a collection of numbers. \n\nThe most idiomatic and robust way to handle this is to allow the `ZeroDivisionError` to happen but catch it to provide a more descriptive `ValueError`, and let `sum()` handle the type validation to ensure the error is",
+      "failure": null,
+      "rubric": {
+        "hits": 3,
+        "checks": 4,
+        "matched": [
+          "empty",
+          "non-numeric",
+          "raise"
+        ],
+        "fraction": 0.75
+      }
+    },
+    {
+      "id": "agentic-rag",
+      "family": "agentic-rag",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\gemma-4-26B-A4B-it-QAT-GGUF\\gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+      "runtime": "b10517",
+      "variant": "gemma4-26b-deep",
+      "max_tokens": 256,
+      "latency_ms": 17484.49,
+      "output": "No causal control was run, so the signal increase is not proven to be caused by the buffer exchange [source:lab-notes.md:0-72]. The sample recorded was B-17 [source:lab-notes.md:73-121].",
+      "failure": null,
+      "rubric": {
+        "hits": 3,
+        "checks": 4,
+        "matched": [
+          "[source:",
+          "B-17",
+          "control"
+        ],
+        "fraction": 0.75
+      }
+    },
+    {
+      "id": "complex-reasoning",
+      "family": "reasoning",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\gemma-4-26B-A4B-it-QAT-GGUF\\gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+      "runtime": "b10517",
+      "variant": "gemma4-26b-deep",
+      "max_tokens": 256,
+      "latency_ms": 29892.16,
+      "output": "To find the earliest completion time, we must determine when each stage can start based on its dependency and the allowed overlap.\n\n### 1. Explicit Solution\n\n**Stage A (Duration: 18s)**\n*   **Starts:** $t = 0$\n*   **Finishes:** $t = 18$\n\n**Stage B (Duration: 20s)**\n*   **Dependency:** Can overlap with A only after A's first 6 seconds.\n*   **Earliest Start Time:** $t = 6$ (The moment A is 6 seconds into its process).\n*   **Finishes:** $6 + 20 = 26$\n\n**Stage C (Duration: 12s)**\n*   **Dependency:** Starts after B finishes.\n*   **Earliest Start Time:** $t = 26$\n*   **Finishes:** $26 + 12 = 38$\n\n**Earliest Completion Time: 38 seconds**\n\n***\n\n### 2. Overlap Interval\nThe overlap occurs between Stage A and Stage B. \n*   Stage A runs from $t = 0$ to $t = ",
+      "failure": null,
+      "rubric": {
+        "hits": 1,
+        "checks": 3,
+        "matched": [
+          "6"
+        ],
+        "fraction": 0.3333333333333333
+      }
+    },
+    {
+      "id": "online-research-discipline",
+      "family": "online-research",
+      "model": "C:\\Users\\shoko\\.lmstudio\\models\\lmstudio-community\\gemma-4-26B-A4B-it-QAT-GGUF\\gemma-4-26B-A4B-it-QAT-Q4_0.gguf",
+      "runtime": "b10517",
+      "variant": "gemma4-26b-deep",
+      "max_tokens": 256,
+      "latency_ms": 28104.37,
+      "output": "As an online research agent, I have analyzed your request. To proceed with a professional-grade investigation, I must report that the task is currently **unexecutable**.\n\n### 1. What is missing\nTo provide an accurate, evidence-based response, the following components are required:\n*   **A Research Topic/Query:** There is no subject matter, specific question, or data point defined to investigate.\n*   **Operational Tools:** I lack access to a live web browser, a search engine API, or any specialized databases to pull real-time data.\n*   **Contextual Constraints:** There are no parameters regarding the required time frame (e.g., \"last 24 hours\" vs. \"historical\"), geographic scope, or desired output format.\n*   **Source Material:** There are no uploaded documents, URLs, or datasets to synthesize.\n\n### 2. Search Plan (Template)\nOnce a topic is provided, I will execute the following reproducible workflow:\n\n1.  **Query Expansion:** Deconstruct the topic into primary keywords, secondary technical terms, and \"Boolean\" strings (e.g., `Topic AND \"specific term\" -exclusion`).\n2.  **Multi-Layered Search:**\n    ",
+      "failure": null,
+      "rubric": {
+        "hits": 3,
+        "checks": 4,
+        "matched": [
+          "source",
+          "search",
+          "current"
+        ],
+        "fraction": 0.75
+      }
+    }
+  ]
+}
