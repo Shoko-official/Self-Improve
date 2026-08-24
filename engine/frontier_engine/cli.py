@@ -790,6 +790,39 @@ def workspace_tool(root: Path, project_id: str, workspace: Path, action: str, re
         agent.close(); store.close()
 
 
+def approve_agent_tool(root: Path, project_id: str, tool_call_id: str) -> dict[str, object]:
+    store = FrontierStore(root); agent = AgentStateStore(root / "agent.sqlite3")
+    try:
+        store.require_active_project(project_id)
+        row = agent.tool_call(tool_call_id)
+        if row is None or row["project_id"] != project_id:
+            raise KeyError("FR-AGENT-APPROVAL-NOT-FOUND")
+        if row["tool_name"] != "workspace.write" or row["state"] != "approval_required":
+            raise ValueError("FR-AGENT-APPROVAL-NOT-PENDING")
+        request = json.loads(row["request"])
+        relative_path = request.get("path")
+        content = request.get("content")
+        if not isinstance(relative_path, str) or not isinstance(content, str):
+            raise ValueError("FR-AGENT-APPROVAL-MALFORMED")
+        relative = Path(relative_path)
+        if not relative_path or relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("FR-WORKSPACE-PATH: a relative non-traversing path is required")
+        grants = [grant for grant in store.project_folder_grants(project_id) if grant["revoked_at"] is None and grant["operation"] == "write"]
+        for grant in grants:
+            workspace = Path(str(grant["path"])).resolve(strict=True)
+            candidate = (workspace / relative).resolve(strict=False)
+            try:
+                candidate.relative_to(workspace)
+            except ValueError:
+                continue
+            tools = ProjectWorkspaceTools(store, agent, project_id, workspace)
+            written = tools.write_file(relative_path, content)
+            return {"approved": True, "approved_from": tool_call_id, "path": relative_path, "written": str(written)}
+        raise PermissionError("FR-AGENT-WRITE-PERMISSION")
+    finally:
+        agent.close(); store.close()
+
+
 def run_agent(root: Path, project_id: str, model: str, prompt: str, skill_ids: list[str] | None = None, access_mode: str = "ask", reasoning_effort: str = "standard", work_mode: str = "chat") -> dict[str, object]:
     store = FrontierStore(root)
     try:
@@ -1108,7 +1141,7 @@ def _sha256(path: Path) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="frontierctl")
-    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "image-runtime-health", "image-runtime-submit", "image-runtime-history", "audio-transcribe", "rag-ingest", "rag-search", "rag-evaluate", "benchmark-run", "benchmark-reports", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
+    parser.add_argument("command", choices=("doctor", "status", "config", "serve", "kernel-stdio", "url", "service-status", "logs", "stop", "environments", "create-environment", "create-r-environment", "install-packages", "install-r-packages", "render-preview", "artifact-preview", "storage-transfer", "s3-transfer", "remote-compute", "verify-runtime-bundle", "projects", "set-project-instructions", "sessions", "star-session", "set-session-reasoning", "archive-session", "restore-session", "search-sessions", "archive-project", "restore-project", "project-folders", "grant-project-folder", "revoke-project-folder", "project-git-context", "project-git-diff", "jobs", "cancel-job", "retry-job", "automations", "create-automation", "automation-start", "automation-status", "automation-cancel", "automation-retry", "automation-due", "automation-run-worker", "agent-workspace", "agent-run", "agent-approve-tool", "agent-activity", "notifications", "acknowledge-notification", "integration-probe", "mcp-call", "shell-exec", "generations", "generate-local", "inference-plan", "warmup-model", "install-ollama-model", "install-shoko-gguf-runtime", "local-model-catalog", "lmstudio-library", "reference-lmstudio-model", "provider-health", "provider-egress-preview", "provider-chat", "image-runtime-health", "image-runtime-submit", "image-runtime-history", "audio-transcribe", "rag-ingest", "rag-search", "rag-evaluate", "benchmark-run", "benchmark-reports", "model-search", "model-download-plan", "model-download-start", "model-download-status", "model-download-retry", "model-download-run", "model-download", "artifacts", "search-artifacts", "artifact-versions", "annotations", "consume-annotations", "review", "literature", "claims", "set-claim-status", "connectors", "skills", "extensions", "export", "import"))
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--input", type=Path)
@@ -1150,6 +1183,7 @@ def main() -> None:
     parser.add_argument("--starred", choices=("true", "false"))
     parser.add_argument("--operation")
     parser.add_argument("--todo-id")
+    parser.add_argument("--tool-call-id")
     parser.add_argument("--todo-text")
     parser.add_argument("--notification-id")
     parser.add_argument("--working-directory", type=Path)
@@ -1431,6 +1465,10 @@ def main() -> None:
         if args.project_id is None or args.model is None or args.prompt is None:
             parser.error("agent-run requires --project-id, --model, and --prompt")
         result = run_agent(root, args.project_id, args.model, args.prompt, args.skill_id, args.access_mode, args.reasoning_effort, args.work_mode)
+    elif args.command == "agent-approve-tool":
+        if args.project_id is None or args.tool_call_id is None:
+            parser.error("agent-approve-tool requires --project-id and --tool-call-id")
+        result = approve_agent_tool(root, args.project_id, args.tool_call_id)
     elif args.command == "agent-activity":
         if args.project_id is None:
             parser.error("agent-activity requires --project-id")

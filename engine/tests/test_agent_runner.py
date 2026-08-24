@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from frontier_engine.agent_runner import parse_tool_calls, run_local_agent
 from frontier_engine.agent_state import AgentStateStore
+from frontier_engine.cli import approve_agent_tool
 from frontier_engine.store import FrontierStore
 
 
@@ -102,3 +103,13 @@ class AgentRunnerTests(unittest.TestCase):
             self.assertFalse((workspace / "note.txt").exists())
             self.assertTrue(any(call["state"] == "approval_required" for call in state.tool_calls(project_id)))
             state.close(); frontier.close()
+
+    def test_pending_workspace_write_can_be_approved_from_its_recorded_request(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); workspace = root / "workspace"; workspace.mkdir(); frontier = FrontierStore(root); project_id = frontier.create_project("Fixture"); frontier.grant_project_folder(project_id, workspace, "write")
+            state = AgentStateStore(root / "agent.sqlite3")
+            call_id = state.record_tool_call(project_id, "workspace.write", json.dumps({"path": "approved.txt", "content": "host approved"}), "approval_required", json.dumps({"error": "FR-AGENT-WRITE-APPROVAL-REQUIRED"}))
+            state.close(); frontier.close()
+            result = approve_agent_tool(root, project_id, call_id)
+            self.assertTrue(result["approved"])
+            self.assertEqual((workspace / "approved.txt").read_text(encoding="utf-8"), "host approved")

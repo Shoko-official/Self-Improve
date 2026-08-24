@@ -573,6 +573,20 @@ fn local_agent_activity_development(
 }
 
 #[tauri::command]
+fn approve_agent_tool_development(
+    project_id: String,
+    tool_call_id: String,
+) -> Result<serde_json::Value, String> {
+    run_development_engine(&[
+        "agent-approve-tool".to_owned(),
+        "--project-id".to_owned(),
+        project_id,
+        "--tool-call-id".to_owned(),
+        tool_call_id,
+    ])
+}
+
+#[tauri::command]
 fn desktop_notifications_development() -> Result<serde_json::Value, String> {
     run_development_engine(&["notifications".to_owned()])
 }
@@ -1533,6 +1547,7 @@ fn main() {
             kernel_execute_development,
             kernel_restart_development,
             local_agent_activity_development,
+            approve_agent_tool_development,
             desktop_notifications_development,
             acknowledge_desktop_notification_development,
             run_local_agent_development,
