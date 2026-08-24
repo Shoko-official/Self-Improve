@@ -796,11 +796,14 @@ def run_agent(root: Path, project_id: str, model: str, prompt: str, skill_ids: l
         store.require_active_project(project_id)
         project = store.connection.execute("SELECT name, instructions FROM projects WHERE id = ?", (project_id,)).fetchone()
         folders = [str(grant["path"]) for grant in store.project_folder_grants(project_id) if grant["revoked_at"] is None]
+        state = AgentStateStore(root / "agent.sqlite3")
+        try:
+            workspace = Path(folders[0]) if folders else None
+            return run_local_agent(state, project_id, model, prompt, skill_ids=skill_ids, access_mode=access_mode, reasoning_effort=reasoning_effort, runtime_root=root, project_name=str(project["name"]), project_instructions=str(project["instructions"]), folders=folders, work_mode=work_mode, workspace=workspace, frontier_store=store)
+        finally:
+            state.close()
     finally:
         store.close()
-    state = AgentStateStore(root / "agent.sqlite3")
-    try: return run_local_agent(state, project_id, model, prompt, skill_ids=skill_ids, access_mode=access_mode, reasoning_effort=reasoning_effort, runtime_root=root, project_name=str(project["name"]), project_instructions=str(project["instructions"]), folders=folders, work_mode=work_mode)
-    finally: state.close()
 
 
 def probe_integrations(root: Path, approved: bool) -> dict[str, object]:
