@@ -61,6 +61,17 @@ type ArtifactVersion = { id: string; version: number; content_hash: string; exec
 type EnvironmentRecord = { name: string; language: string; executable: string | null; python_version: string | null; runtime_version?: string | null; package_fingerprint: string | null; packages: Record<string, string>; };
 type AgentActivity = { project_id: string; plan: string | null; plan_state: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string }; result: { error?: string; output_chars?: number } }>; };
 type LocalModelCatalog = { shoko_gguf: { available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean }; ollama: { available: boolean; models: string[]; reason?: string }; lm_studio_library: { available: boolean; models_root: string; models: Array<{ key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string }> }; registered_models: Array<{ path: string; capability_state: string }> };
+export type AgentModelOption = { value: string; label: string; source: "shoko-gguf" | "ollama" | "provider" };
+export function localAgentModelOptions(catalog: LocalModelCatalog | null, providerProfile: ProviderProfile | null = null): AgentModelOption[] {
+  if (!catalog) return providerProfile?.models.map(model => ({ value: `provider:${model}`, label: `${model} (${providerProfile.kind})`, source: "provider" })) ?? [];
+  const options: AgentModelOption[] = [];
+  if (catalog.shoko_gguf.available) {
+    options.push(...catalog.lm_studio_library.models.map(model => ({ value: `gguf:${model.path}`, label: `${model.display_name} · Shoko runtime`, source: "shoko-gguf" as const })));
+  }
+  options.push(...catalog.ollama.models.map(model => ({ value: model, label: `${model} · Ollama`, source: "ollama" as const })));
+  if (providerProfile) options.push(...providerProfile.models.map(model => ({ value: `provider:${model}`, label: `${model} (${providerProfile.kind})`, source: "provider" as const })));
+  return options;
+}
 type BenchmarkTask = { id: string; family: string; model: string; runtime: string; max_tokens: number; latency_ms: number; output: string; failure: string | null; rubric?: { hits: number; total: number; fraction: number; checks: Record<string, boolean> } };
 type BenchmarkReport = { run_id: string; status: string; model: string; variant: string; max_tokens: number; runtime: string; started_at: number; completed_at: number; report_path: string; tasks: BenchmarkTask[] };
 type BenchmarkRunSummary = { run_id: string; status: string; model: string; variant: string; completed_at: number; report_path: string; macro_fraction: number; latency_ms: number };
@@ -460,8 +471,9 @@ export function ChatSurface({ projects, language, onNavigate, preferredProjectId
       .then(result => {
         setCatalog(result);
         const savedModel = localStorage.getItem(selectedLocalModelKey);
-        const savedModelAvailable = result.shoko_gguf.available && savedModel?.startsWith("gguf:") && result.lm_studio_library.models.some(item => `gguf:${item.path}` === savedModel);
-        setModel(current => current || (savedModelAvailable && savedModel ? savedModel : result.shoko_gguf.available && result.lm_studio_library.models[0] ? `gguf:${result.lm_studio_library.models[0].path}` : result.ollama.models[0] || ""));
+        const options = localAgentModelOptions(result);
+        const savedModelAvailable = savedModel ? options.some(option => option.value === savedModel) : false;
+        setModel(current => current || (savedModelAvailable && savedModel ? savedModel : options[0]?.value || ""));
       })
       .catch(() => setCatalog(null));
   }, []);
@@ -681,7 +693,7 @@ export function ChatSurface({ projects, language, onNavigate, preferredProjectId
           <div className="composer-tools-left">
             <button className="composer-tool composer-symbol" type="button" onClick={() => { setPrompt("/"); setPalette("commands"); }} aria-label={language === "fr" ? "Ouvrir les commandes" : "Open commands"}>/</button>
             <button className="composer-tool composer-symbol" type="button" onClick={() => { setPrompt("$"); setPalette("resources"); }} aria-label={language === "fr" ? "Choisir un skill" : "Choose a skill"}>$</button>
-            <label className="composer-select"><Boxes size={14} /><select value={model} onChange={event => setModel(event.target.value)} aria-label={language === "fr" ? "Modèle" : "Model"}><option value="">{language === "fr" ? "Choisir un modèle" : "Choose model"}</option>{catalog?.shoko_gguf.available && catalog.lm_studio_library.models.map(item => <option value={`gguf:${item.path}`} key={item.path}>{item.display_name}</option>)}{catalog?.ollama.models.map(item => <option value={item} key={item}>{item}</option>)}{providerProfile?.models.map(item => <option value={`provider:${item}`} key={`provider:${item}`}>{item} ({providerProfile.kind})</option>)}</select></label>
+            <label className="composer-select"><Boxes size={14} /><select value={model} onChange={event => setModel(event.target.value)} aria-label={language === "fr" ? "Modèle" : "Model"}><option value="">{language === "fr" ? "Choisir un modèle" : "Choose model"}</option>{localAgentModelOptions(catalog, providerProfile).map(option => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>
             <label className="composer-select"><ShieldCheck size={14} /><select value={accessMode} onChange={event => setAccessMode(event.target.value)} aria-label={language === "fr" ? "Accès de l’IA" : "AI access"}><option value="read">{language === "fr" ? "Lecture" : "Read"}</option><option value="ask">{language === "fr" ? "Demander" : "Ask"}</option><option value="full">{language === "fr" ? "Accès complet" : "Full access"}</option></select></label>
             <label className="composer-select"><Gauge size={14} /><select value={reasoningEffort} onChange={event => setReasoningEffort(event.target.value)} aria-label={language === "fr" ? "Effort de raisonnement" : "Reasoning effort"}><option value="compact">{language === "fr" ? "Rapide" : "Fast"}</option><option value="standard">Standard</option><option value="extended">{language === "fr" ? "Approfondi" : "Extended"}</option></select></label>
             {workMode === "plan" && <button className="composer-skill-chip" type="button" onClick={() => setWorkMode("chat")}>{language === "fr" ? "Mode plan" : "Plan mode"}</button>}
