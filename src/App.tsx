@@ -59,7 +59,7 @@ type ArtifactRecord = { id: string; name: string; media_type: string; created_at
 type ArtifactPreview = { artifact_version_id: string; renderer_id: string; renderer_version: string; source_sha256: string; html: string; markdown?: string; figure?: ScientificFigureData; warnings?: string[]; execution?: string; resources?: string; sanitizer?: string; };
 type ArtifactVersion = { id: string; version: number; content_hash: string; execution_log: Record<string, string> };
 type EnvironmentRecord = { name: string; language: string; executable: string | null; python_version: string | null; runtime_version?: string | null; package_fingerprint: string | null; packages: Record<string, string>; };
-type AgentActivity = { project_id: string; plan: string | null; plan_state: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string }; result: { error?: string; output_chars?: number } }>; };
+type AgentActivity = { project_id: string; plan: string | null; plan_state: string | null; todos: Array<{ id: string; text: string; state: string }>; tool_calls: Array<{ id: string; tool_name: string; created_at: string; state: string; request: { model?: string; path?: string; content?: string }; result: { error?: string; output_chars?: number } }>; };
 type LocalModelCatalog = { shoko_gguf: { available: boolean; version: string; path: string | null; reason: string | null; independent_of_lm_studio: boolean }; ollama: { available: boolean; models: string[]; reason?: string }; lm_studio_library: { available: boolean; models_root: string; models: Array<{ key: string; display_name: string; path: string; size_bytes: number; format: string; execution_runtime: string }> }; registered_models: Array<{ path: string; capability_state: string }> };
 export type AgentModelOption = { value: string; label: string; source: "shoko-gguf" | "ollama" | "provider" };
 export function localAgentModelOptions(catalog: LocalModelCatalog | null, providerProfile: ProviderProfile | null = null): AgentModelOption[] {
@@ -605,6 +605,20 @@ export function ChatSurface({ projects, language, onNavigate, preferredProjectId
     await refreshActivity(projectId);
   }
 
+  async function approveTool(toolCallId: string) {
+    if (!projectId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await invoke("approve_agent_tool_development", { projectId, toolCallId });
+      await refreshActivity(projectId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "FR-AGENT-APPROVAL-FAILED");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="chat-workspace">
       <div className="chat-transcript" aria-live="polite">
@@ -650,6 +664,13 @@ export function ChatSurface({ projects, language, onNavigate, preferredProjectId
             </div>
           </section>
         )}
+        {activity?.tool_calls.filter(call => call.state === "approval_required" && call.tool_name === "workspace.write").map(call => (
+          <section className="activity-ledger" key={`approval-${call.id}`}>
+            <div className="activity-heading"><ShieldCheck size={16} /><h3>{language === "fr" ? "Autorisation d’écriture locale" : "Local write approval"}</h3></div>
+            <p>{call.request.path ?? "workspace file"}</p>
+            <button className="action" type="button" onClick={() => void approveTool(call.id)} disabled={busy}>{language === "fr" ? "Autoriser cette écriture" : "Approve this write"}</button>
+          </section>
+        ))}
       </div>
 
       {activity?.plan && <section className="activity-ledger"><div className="activity-heading"><Code2 size={16} /><h3>{language === "fr" ? "Gérer l’objectif" : "Manage goal"}</h3></div><div className="workspace-row"><span>{activity.plan_state ?? "active"}: {activity.plan}</span><button type="button" className="minor-action" onClick={() => void manageGoal(activity.plan_state === "paused" ? "goal-active" : "goal-paused")}>{activity.plan_state === "paused" ? (language === "fr" ? "Reprendre" : "Resume") : (language === "fr" ? "Pause" : "Pause")}</button><button type="button" className="minor-action" onClick={() => void manageGoal("goal-completed")}>{language === "fr" ? "Terminer" : "Complete"}</button><button type="button" className="minor-action" onClick={() => void manageGoal("goal-delete")}>{language === "fr" ? "Supprimer" : "Delete"}</button></div><button type="button" className="minor-action" onClick={() => { const next = window.prompt(language === "fr" ? "Modifier l’objectif" : "Edit goal", activity.plan ?? ""); if (next !== null) void manageGoal("goal-update", next); }}>{language === "fr" ? "Modifier l’objectif" : "Edit goal"}</button></section>}

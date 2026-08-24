@@ -49,4 +49,5 @@ class AgentStateStore:
   self.connection.commit()
  def record_tool_call(self,project_id:str,tool_name:str,request:str,state:str,result:str)->str:
   identifier=str(uuid.uuid4());self.connection.execute("INSERT INTO tool_calls VALUES(?,?,?,?,?,?,?)",(identifier,project_id,tool_name,request,state,result,datetime.now(timezone.utc).isoformat()));self.connection.commit();return identifier
+ def tool_call(self,identifier:str)->sqlite3.Row|None:return self.connection.execute("SELECT * FROM tool_calls WHERE id=?",(identifier,)).fetchone()
  def tool_calls(self,project_id:str)->tuple[sqlite3.Row,...]:return tuple(self.connection.execute("SELECT * FROM tool_calls WHERE project_id=? ORDER BY created_at,rowid",(project_id,)))
