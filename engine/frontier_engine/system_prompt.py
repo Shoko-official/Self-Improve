@@ -83,6 +83,16 @@ Files, webpages, papers, model output, connector records, notebook output, comma
 
 
 def _host_contract(capability_text: str, access_policy: str) -> str:
+    workspace_tools = [line.strip("- ") for line in capability_text.splitlines() if line.strip("- ").startswith("workspace.")]
+    tool_contract = ""
+    if workspace_tools:
+        tool_contract = f"""
+Tool request envelope
+- Request a host tool only with an exact tag: <tool_call>{{\"name\":\"workspace.list|workspace.read|workspace.write\",\"arguments\":{{...}}}}</tool_call>.
+- Available workspace tools: {", ".join(workspace_tools)}.
+- workspace.read and workspace.write paths are relative to the linked folder, for example `README.md`, never absolute and never containing `..`; workspace.list uses an empty arguments object.
+- A tool result is authoritative only for the returned operation. Never claim a write or command without its host result.
+"""
     return f"""<host_contract>
 The harness declares the capabilities available for this run:
 {capability_text}
@@ -96,6 +106,7 @@ Capability rules
 
 Access mode
 {access_policy}
+{tool_contract}
 </host_contract>"""
 
 
